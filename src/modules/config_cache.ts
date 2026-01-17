@@ -5,8 +5,8 @@
 // stores and retrieves tenant configs from cache only.
 // caller is responsible for loading from db on cache miss.
 
-import { redis_client } from "./redis_client.js";
-import { tenant_config } from "../types/tenant_config_type.js";
+import { redis_client } from "./redis_client";
+import { tenant_config } from "../types/tenant_config_type";
 
 export class config_cache {
 

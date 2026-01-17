@@ -5,11 +5,11 @@
 // provides a simple api for the data flow:
 // 1. check cache → 2. cache miss → 3. load from db → 4. cache result
 
-import { db } from "./database.js";
-import { redis_client } from "./redis_client.js";
-import { rate_limiter } from "./rate_limiter.js";
-import { config_cache } from "./config_cache.js";
-import { tenant_config } from "../types/tenant_config_type.js";
+import { db } from "./database";
+import { redis_client } from "./redis_client";
+import { rate_limiter } from "./rate_limiter";
+import { config_cache } from "./config_cache";
+import { tenant_config } from "../types/tenant_config_type";
 
 export interface storage_options {
     db_path: string;

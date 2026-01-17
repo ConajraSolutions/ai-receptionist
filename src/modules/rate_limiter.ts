@@ -5,7 +5,7 @@
 // implements graceful degradation pattern for redis failures.
 // see: https://redis.io/docs/latest/develop/clients/nodejs/error-handling/
 
-import { redis_client } from "./redis_client.js";
+import { redis_client } from "./redis_client";
 
 export class rate_limiter {
 

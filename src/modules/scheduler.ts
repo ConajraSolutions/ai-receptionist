@@ -1,7 +1,7 @@
 // Conajra Solutions © 2026
 // TODO: hamza will do this
 
-import { storage } from "./storage.js";
+import { storage } from "./storage";
 
 export class scheduler {
 

@@ -7,9 +7,9 @@
 
 // read more on the mediator pattern here: https://refactoring.guru/design-patterns/mediator
 
-import { vapi_function_call } from "../types/vapi.js";
-import { storage, storage_options } from "./storage.js";
-import { scheduler } from "./scheduler.js";
+import { vapi_function_call } from "../types/vapi";
+import { storage, storage_options } from "./storage";
+import { scheduler } from "./scheduler";
 
 export class mediator {
 

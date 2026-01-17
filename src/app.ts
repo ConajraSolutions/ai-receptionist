@@ -7,18 +7,26 @@
 import express from "express";
 import "dotenv/config";
 
-import { mediator } from "./modules/mediator.js";
+import { mediator } from "./modules/mediator";
 
 const app = express();
 app.use(express.json());
 
+function check_env(name: string): string 
+{
+    const value = process.env[name];
+    if (!value)
+        throw new Error(`Missing required env var: ${name}`);
+    return value;
+}
+
 const call_mediator = new mediator({
-    db_path: process.env.DB_PATH || "./data",
-    redis_url: process.env.REDIS_URL || "redis://localhost:6379",
-    rate_limit_max: parseInt(process.env.RATE_LIMIT_MAX || "100"),
-    rate_limit_window: parseInt(process.env.RATE_LIMIT_WINDOW || "60"),
-    rate_limit_fail_open: process.env.RATE_LIMIT_FAIL_OPEN === "true",
-    config_cache_ttl: parseInt(process.env.CONFIG_CACHE_TTL || "3600")
+    db_path: check_env("DB_PATH"),
+    redis_url: check_env("REDIS_URL"),
+    rate_limit_max: parseInt(check_env("RATE_LIMIT_MAX")),
+    rate_limit_window: parseInt(check_env("RATE_LIMIT_WINDOW")),
+    rate_limit_fail_open: check_env("RATE_LIMIT_FAIL_OPEN") === "true",
+    config_cache_ttl: parseInt(check_env("CONFIG_CACHE_TTL"))
 });
 
 app.post("/vapi/webhook", async (req, res) =>
