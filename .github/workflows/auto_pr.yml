@@ -15,13 +15,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check if PR exists
+      - name: Ensure 'auto' label exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check if 'auto' label exists, create it if not
+          gh label list --json name --jq '.[].name' | grep -q "^auto$" || \
+          gh label create "auto" --color "0E8A16" --description "Automated PR - will auto-merge when CI passes"
+
+      - name: Check if PR already exists
         id: check_pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_EXISTS=$(gh pr list --head "${{ github.ref_name }}" --base main --json number --jq 'length')
           echo "exists=$PR_EXISTS" >> "$GITHUB_OUTPUT"
+          echo "PR exists: $PR_EXISTS"
 
       - name: Create PR to main
         if: steps.check_pr.outputs.exists == '0'
@@ -40,3 +49,8 @@ jobs:
 
           This PR will auto-merge once CI passes." \
             --label "auto"
+
+      - name: PR already exists
+        if: steps.check_pr.outputs.exists != '0'
+        run: |
+          echo "PR from ${{ github.ref_name }} to main already exists. Skipping creation."
