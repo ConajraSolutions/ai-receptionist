@@ -20,7 +20,7 @@ function check_env(name: string): string
     return value;
 }
 
-const call_mediator = new mediator({
+const call_mediator = new mediatorippt({
     db_path: check_env("DB_PATH"),
     redis_url: check_env("REDIS_URL"),
     rate_limit_max: parseInt(check_env("RATE_LIMIT_MAX")),
