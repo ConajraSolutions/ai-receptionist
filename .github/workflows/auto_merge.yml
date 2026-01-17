@@ -23,61 +23,38 @@ jobs:
             exit 0
           fi
           echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
-
+      
       - name: Check PR has 'auto' label
         id: label
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
           PR_NUMBER="${{ steps.pr.outputs.number }}"
-          HAS=$(gh pr view "$PR_NUMBER" --json labels --jq '[.labels[].name] | contains(["auto"])')
+          HAS=$(gh pr view "$PR_NUMBER" -R "$REPO" --json labels --jq '[.labels[].name] | contains(["auto"])')
           echo "has_auto=$HAS" >> "$GITHUB_OUTPUT"
-
+      
       - name: Check mergeability
         id: mergeable
         if: steps.label.outputs.has_auto == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
           PR_NUMBER="${{ steps.pr.outputs.number }}"
           sleep 2
-          M=$(gh pr view "$PR_NUMBER" --json mergeable --jq '.mergeable')
+          M=$(gh pr view "$PR_NUMBER" -R "$REPO" --json mergeable --jq '.mergeable')
           echo "mergeable=$M" >> "$GITHUB_OUTPUT"
-
-      - name: Discord (conflicts)
-        if: steps.label.outputs.has_auto == 'true' && steps.mergeable.outputs.mergeable == 'CONFLICTING'
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ steps.pr.outputs.number }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          test -n "$DISCORD_WEBHOOK_URL" || exit 0
-          PR_URL="https://github.com/${REPO}/pull/${PR_NUMBER}"
-          CONFLICT_URL="https://github.com/${REPO}/pull/${PR_NUMBER}/conflicts"
-          TITLE=$(gh pr view "$PR_NUMBER" --json title --jq '.title')
-
-          curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL" <<EOF
-          {
-            "embeds": [
-              {
-                "title": "⚠️ Merge blocked by conflicts",
-                "url": "${PR_URL}",
-                "description": "**Repo:** ${REPO}\n**PR:** #${PR_NUMBER} - ${TITLE}\n\n[Open conflict editor](${CONFLICT_URL})",
-                "color": 16744448
-              }
-            ]
-          }
-          EOF
-
+      
       - name: Enable auto-merge (no branch deletion)
         if: steps.label.outputs.has_auto == 'true' && steps.mergeable.outputs.mergeable != 'CONFLICTING'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
           PR_NUMBER="${{ steps.pr.outputs.number }}"
-          # This enables auto-merge. It will NOT delete the branch unless you pass --delete-branch.
-          gh pr merge "$PR_NUMBER" --auto --squash
+          gh pr merge "$PR_NUMBER" -R "$REPO" --auto --squash
+
 
       - name: Discord (auto-merge enabled)
         if: steps.label.outputs.has_auto == 'true' && steps.mergeable.outputs.mergeable != 'CONFLICTING'
