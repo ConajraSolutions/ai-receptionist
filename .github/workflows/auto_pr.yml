@@ -92,7 +92,7 @@ jobs:
       - name: Notify Discord (merge conflict)
         if: steps.check_behind.outputs.behind != '0' && steps.merge.outputs.success == 'false'
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           curl -H "Content-Type: application/json" \
             -d "{\"content\": \"⚠️ **Merge Conflict** in branch \`${{ github.ref_name }}\`\n\nCould not automatically merge \`main\` into the feature branch.\n\n**Repository:** ${{ github.repository }}\n**Actor:** ${{ github.actor }}\n**Branch:** ${{ github.ref_name }}\n\nPlease resolve the conflicts manually.\"}" \
