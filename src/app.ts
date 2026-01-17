@@ -9,7 +9,7 @@ import "dotenv/config";
 
 import { mediator } from "./modules/mediator";
  
-// server setup code
+// server setup code h
 const app = express();
 app.use(express.json());
 
@@ -64,4 +64,5 @@ call_mediator.connect()
     .catch((error) => {
         console.error("failed to connect storage:", error);
         process.exit(1);
+
     });
