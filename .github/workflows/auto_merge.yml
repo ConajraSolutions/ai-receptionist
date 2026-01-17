@@ -2,25 +2,21 @@ name: Auto-Merge PR
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [labeled, synchronize, reopened]
     branches: [main]
-  workflow_run:
-    workflows: ["Node.js CI"]
+  check_suite:
     types: [completed]
-    branches-ignore:
-      - main
 
 permissions:
   contents: write
   pull-requests: write
-  checks: read
 
 jobs:
   auto_merge:
     runs-on: ubuntu-latest
     if: |
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
-      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'auto'))
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'auto')) ||
+      (github.event_name == 'check_suite' && github.event.check_suite.conclusion == 'success')
     
     steps:
       - uses: actions/checkout@v4
@@ -30,82 +26,118 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ "${{ github.event_name }}" == "workflow_run" ]; then
-            BRANCH="${{ github.event.workflow_run.head_branch }}"
-            PR_NUMBER=$(gh pr list --head "$BRANCH" --base main --json number --jq '.[0].number')
+          if [ "${{ github.event_name }}" == "check_suite" ]; then
+            # Get PR associated with this check suite
+            PR_NUMBER=$(gh pr list --json number,headRefOid --jq ".[] | select(.headRefOid == \"${{ github.event.check_suite.head_sha }}\") | .number" | head -1)
           else
             PR_NUMBER="${{ github.event.pull_request.number }}"
+          fi
+          
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No PR found"
+            exit 0
           fi
           
           echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           echo "Found PR #$PR_NUMBER"
 
-      - name: Check CI status
-        id: check_ci
+      - name: Check if PR has auto label
+        id: check_label
         if: steps.get_pr.outputs.number != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER="${{ steps.get_pr.outputs.number }}"
-          
-          # Get the latest commit SHA for the PR
-          PR_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
-          
-          # Check if all required checks have passed
-          CHECKS_PASSED=$(gh api \
-            "/repos/${{ github.repository }}/commits/$PR_SHA/check-runs" \
-            --jq '[.check_runs[] | select(.name == "test" or .name == "build")] | all(.conclusion == "success")')
-          
-          echo "passed=$CHECKS_PASSED" >> "$GITHUB_OUTPUT"
-          echo "CI checks passed: $CHECKS_PASSED"
+          HAS_AUTO_LABEL=$(gh pr view "$PR_NUMBER" --json labels --jq '[.labels[].name] | contains(["auto"])')
+          echo "has_label=$HAS_AUTO_LABEL" >> "$GITHUB_OUTPUT"
+          echo "Has auto label: $HAS_AUTO_LABEL"
 
-      - name: Enable auto-merge
-        if: steps.check_ci.outputs.passed == 'true' && steps.get_pr.outputs.number != ''
+      - name: Wait for checks and enable auto-merge
+        if: steps.check_label.outputs.has_label == 'true' && steps.get_pr.outputs.number != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER="${{ steps.get_pr.outputs.number }}"
           
-          # Check if PR has 'auto' label
-          HAS_AUTO_LABEL=$(gh pr view "$PR_NUMBER" --json labels --jq '[.labels[].name] | contains(["auto"])')
+          echo "Checking current status of PR #$PR_NUMBER..."
           
-          if [ "$HAS_AUTO_LABEL" == "true" ]; then
-            echo "Enabling auto-merge for PR #$PR_NUMBER"
-            gh pr merge "$PR_NUMBER" --auto --squash --delete-branch
+          # Get PR status with details
+          PR_STATUS=$(gh pr view "$PR_NUMBER" --json statusCheckRollup --jq '.statusCheckRollup')
+          
+          # Show all checks
+          echo "=== All Checks ==="
+          echo "$PR_STATUS" | jq -r '.[] | "\(.context // .name): \(.status // .state) - \(.conclusion // "N/A")"'
+          echo "=================="
+          
+          # Wait up to 10 minutes for checks to complete
+          TIMEOUT=600
+          ELAPSED=0
+          INTERVAL=10
+          
+          while [ $ELAPSED -lt $TIMEOUT ]; do
+            PR_STATUS=$(gh pr view "$PR_NUMBER" --json statusCheckRollup --jq '.statusCheckRollup')
             
-            # Add a comment
-            gh pr comment "$PR_NUMBER" --body "✅ CI passed! Auto-merge enabled. This PR will merge automatically."
-          else
-            echo "PR #$PR_NUMBER does not have 'auto' label, skipping auto-merge"
+            # Count pending/in-progress checks
+            PENDING=$(echo "$PR_STATUS" | jq -r 'select(.status == "PENDING" or .status == "IN_PROGRESS" or .state == "PENDING")' | wc -l)
+            
+            if [ "$PENDING" -eq 0 ]; then
+              echo "All checks completed!"
+              break
+            fi
+            
+            # Show what we're waiting for
+            echo "Still waiting... ($PENDING checks pending/in-progress)"
+            echo "$PR_STATUS" | jq -r '.[] | select(.status == "PENDING" or .status == "IN_PROGRESS" or .state == "PENDING") | "  - \(.context // .name): \(.status // .state)"'
+            
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+          done
+          
+          if [ $ELAPSED -ge $TIMEOUT ]; then
+            echo "Timeout waiting for checks. Not enabling auto-merge."
+            exit 0
           fi
+          
+          # Check if all required checks passed
+          FAILED=$(echo "$PR_STATUS" | jq -r 'select(.conclusion == "FAILURE" or .conclusion == "CANCELLED")' | wc -l)
+          
+          if [ "$FAILED" -gt 0 ]; then
+            echo "Some checks failed. Not enabling auto-merge."
+            echo "$PR_STATUS" | jq -r '.[] | select(.conclusion == "FAILURE" or .conclusion == "CANCELLED") | "  ❌ \(.context // .name): \(.conclusion)"'
+            gh pr comment "$PR_NUMBER" --body "❌ CI checks failed. Auto-merge will not be enabled."
+            exit 0
+          fi
+          
+          # Enable auto-merge
+          echo "Enabling auto-merge for PR #$PR_NUMBER"
+          gh pr merge "$PR_NUMBER" --auto --squash --delete-branch
+          
+          # Add a comment
+          gh pr comment "$PR_NUMBER" --body "✅ CI passed! Auto-merge enabled. This PR will merge automatically once all requirements are met."
 
-      - name: Notify Discord (auto-merge enabled)
-        if: steps.check_ci.outputs.passed == 'true' && steps.get_pr.outputs.number != ''
+      - name: Notify Discord
+        if: steps.check_label.outputs.has_label == 'true' && steps.get_pr.outputs.number != ''
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           PR_NUMBER: ${{ steps.get_pr.outputs.number }}
           REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ -n "$DISCORD_WEBHOOK_URL" ]; then
             PR_URL="https://github.com/${REPO}/pull/${PR_NUMBER}"
             PR_TITLE=$(gh pr view "$PR_NUMBER" --json title --jq '.title')
             PR_AUTHOR=$(gh pr view "$PR_NUMBER" --json author --jq '.author.login')
             
-            node <<'NODE' | curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL"
-            const payload = {
-              embeds: [
-                {
-                  title: `🔀 Auto-merge enabled: PR #${process.env.PR_NUMBER}`,
-                  url: process.env.PR_URL || "",
-                  description:
-                    `**Repo:** ${process.env.REPO}\n` +
-                    `**Author:** ${process.env.PR_AUTHOR || "unknown"}\n` +
-                    `**PR:** #${process.env.PR_NUMBER}\n\n` +
-                    `CI passed! PR will merge automatically.`,
-                  color: 5793266
-                }
-              ]
-            };
-            process.stdout.write(JSON.stringify(payload));
-NODE
+            curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL" <<EOF
+          {
+            "embeds": [
+              {
+                "title": "🔀 Auto-merge enabled: PR #${PR_NUMBER}",
+                "url": "${PR_URL}",
+                "description": "**Repo:** ${REPO}\n**Author:** ${PR_AUTHOR}\n**PR:** #${PR_NUMBER}\n\nCI passed! PR will merge automatically.",
+                "color": 5793266
+              }
+            ]
+          }
+          EOF
           fi
