@@ -13,30 +13,15 @@ jobs:
   open_pr:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Check if PR exists
-        id: check_pr
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          PR_EXISTS=$(gh pr list --head "${{ github.ref_name }}" --base main --json number --jq 'length')
-          echo "exists=$PR_EXISTS" >> "$GITHUB_OUTPUT"
-
-      - name: Create PR to main
-        if: steps.check_pr.outputs.exists == '0'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh pr create \
-            --base main \
-            --head "${{ github.ref_name }}" \
-            --title "Auto PR: ${{ github.ref_name }}" \
-            --body "Automated PR from branch \`${{ github.ref_name }}\` into \`main\`.
-
-          **Triggered by:** ${{ github.actor }}
-          **Branch:** ${{ github.ref_name }}
-          **Commit:** ${{ github.sha }}
-
-          This PR will auto-merge once CI passes." \
-            --label "auto"
+      - name: Create PR to main (if not exists)
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: main
+          branch: ${{ github.ref_name }}
+          title: "Auto PR: ${{ github.ref_name }}"
+          body: |
+            Automated PR from branch `${{ github.ref_name }}` into `main`.
+            Triggered by: ${{ github.actor }}
+          labels: |
+            auto
