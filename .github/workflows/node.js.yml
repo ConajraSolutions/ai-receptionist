@@ -37,6 +37,7 @@ jobs:
         run: |
           echo "short_sha=$(git rev-parse --short '${{ github.sha }}')" >> "$GITHUB_OUTPUT"
           echo "subject=$(git log -1 --pretty=%s)" >> "$GITHUB_OUTPUT"
+          echo "author=$(git log -1 --pretty=%an)" >> "$GITHUB_OUTPUT"
 
           DELIM="__GHA_DELIM_$(date +%s)__"
 
@@ -57,6 +58,7 @@ jobs:
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           SUBJECT: ${{ steps.info.outputs.subject }}
+          AUTHOR: ${{ steps.info.outputs.author }}
           BODY: ${{ steps.info.outputs.body }}
           FILES_RAW: ${{ steps.info.outputs.files }}
           REPO: ${{ github.repository }}
@@ -84,6 +86,7 @@ jobs:
                 description:
                   `**Repo:** ${process.env.REPO}\n` +
                   `**SHA:** ${shortSha}\n\n` +
+                  `**Author:** ${process.env.AUTHOR || "unknown"}\n` +
                   `**Commit message:**\n${process.env.BODY || ""}\n\n` +
                   `**Files changed:**\n\`\`\`\n${files}\n\`\`\`\n` +
                   `[View compare](${compareUrl})`,
