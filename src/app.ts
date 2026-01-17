@@ -9,7 +9,7 @@ import "dotenv/config";
 
 import { mediator } from "./modules/mediator";
 
-const app = expressASD();
+const app = express();
 app.use(express.json());
 
 function check_env(name: string): string 
