@@ -77,17 +77,17 @@ jobs:
           while [ $ELAPSED -lt $TIMEOUT ]; do
             PR_STATUS=$(gh pr view "$PR_NUMBER" --json statusCheckRollup --jq '.statusCheckRollup')
             
-            # Count pending/in-progress checks
-            PENDING=$(echo "$PR_STATUS" | jq -r 'select(.status == "PENDING" or .status == "IN_PROGRESS" or .state == "PENDING")' | wc -l)
+            # Filter out auto_merge and open_pr from the checks we're waiting for
+            PENDING=$(echo "$PR_STATUS" | jq -r '.[] | select((.context // .name) != "auto_merge" and (.context // .name) != "open_pr") | select(.status == "PENDING" or .status == "IN_PROGRESS" or .state == "PENDING")' | jq -s 'length')
             
             if [ "$PENDING" -eq 0 ]; then
-              echo "All checks completed!"
+              echo "All relevant checks completed!"
               break
             fi
             
             # Show what we're waiting for
             echo "Still waiting... ($PENDING checks pending/in-progress)"
-            echo "$PR_STATUS" | jq -r '.[] | select(.status == "PENDING" or .status == "IN_PROGRESS" or .state == "PENDING") | "  - \(.context // .name): \(.status // .state)"'
+            echo "$PR_STATUS" | jq -r '.[] | select((.context // .name) != "auto_merge" and (.context // .name) != "open_pr") | select(.status == "PENDING" or .status == "IN_PROGRESS" or .state == "PENDING") | "  - \(.context // .name): \(.status // .state)"'
             
             sleep $INTERVAL
             ELAPSED=$((ELAPSED + INTERVAL))
@@ -98,8 +98,8 @@ jobs:
             exit 0
           fi
           
-          # Check if all required checks passed
-          FAILED=$(echo "$PR_STATUS" | jq -r 'select(.conclusion == "FAILURE" or .conclusion == "CANCELLED")' | wc -l)
+          # Check if all required checks passed (excluding auto_merge and open_pr)
+          FAILED=$(echo "$PR_STATUS" | jq -r '.[] | select((.context // .name) != "auto_merge" and (.context // .name) != "open_pr") | select(.conclusion == "FAILURE" or .conclusion == "CANCELLED")' | jq -s 'length')
           
           if [ "$FAILED" -gt 0 ]; then
             echo "Some checks failed. Not enabling auto-merge."
