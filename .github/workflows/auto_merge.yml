@@ -59,7 +59,15 @@ jobs:
         run: |
           PR_NUMBER="${{ steps.get_pr.outputs.number }}"
           
-          echo "Waiting for all checks to complete..."
+          echo "Checking current status of PR #$PR_NUMBER..."
+          
+          # Get PR status with details
+          PR_STATUS=$(gh pr view "$PR_NUMBER" --json statusCheckRollup --jq '.statusCheckRollup')
+          
+          # Show all checks
+          echo "=== All Checks ==="
+          echo "$PR_STATUS" | jq -r '.[] | "\(.context // .name): \(.status // .state) - \(.conclusion // "N/A")"'
+          echo "=================="
           
           # Wait up to 10 minutes for checks to complete
           TIMEOUT=600
@@ -67,27 +75,35 @@ jobs:
           INTERVAL=10
           
           while [ $ELAPSED -lt $TIMEOUT ]; do
-            # Get PR status
-            PR_STATUS=$(gh pr view "$PR_NUMBER" --json statusCheckRollup --jq '.statusCheckRollup[]')
+            PR_STATUS=$(gh pr view "$PR_NUMBER" --json statusCheckRollup --jq '.statusCheckRollup')
             
             # Count pending/in-progress checks
-            PENDING=$(echo "$PR_STATUS" | jq -r 'select(.status == "PENDING" or .status == "IN_PROGRESS")' | wc -l)
+            PENDING=$(echo "$PR_STATUS" | jq -r 'select(.status == "PENDING" or .status == "IN_PROGRESS" or .state == "PENDING")' | wc -l)
             
             if [ "$PENDING" -eq 0 ]; then
               echo "All checks completed!"
               break
             fi
             
+            # Show what we're waiting for
             echo "Still waiting... ($PENDING checks pending/in-progress)"
+            echo "$PR_STATUS" | jq -r '.[] | select(.status == "PENDING" or .status == "IN_PROGRESS" or .state == "PENDING") | "  - \(.context // .name): \(.status // .state)"'
+            
             sleep $INTERVAL
             ELAPSED=$((ELAPSED + INTERVAL))
           done
           
-          # Check if all checks passed
-          FAILED=$(echo "$PR_STATUS" | jq -r 'select(.conclusion == "FAILURE")' | wc -l)
+          if [ $ELAPSED -ge $TIMEOUT ]; then
+            echo "Timeout waiting for checks. Not enabling auto-merge."
+            exit 0
+          fi
+          
+          # Check if all required checks passed
+          FAILED=$(echo "$PR_STATUS" | jq -r 'select(.conclusion == "FAILURE" or .conclusion == "CANCELLED")' | wc -l)
           
           if [ "$FAILED" -gt 0 ]; then
             echo "Some checks failed. Not enabling auto-merge."
+            echo "$PR_STATUS" | jq -r '.[] | select(.conclusion == "FAILURE" or .conclusion == "CANCELLED") | "  ❌ \(.context // .name): \(.conclusion)"'
             gh pr comment "$PR_NUMBER" --body "❌ CI checks failed. Auto-merge will not be enabled."
             exit 0
           fi
