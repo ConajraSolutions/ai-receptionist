@@ -111,3 +111,24 @@ fi
 echo "🚀 Release flow started."
 echo "PR: $PR_URL"
 echo "CI should run on the PR. If checks pass, GitHub will auto-merge it (branch will NOT be deleted)."
+
+# --- 8) Wait for checks, then merge ---
+echo "⏳ Waiting for PR checks to complete..."
+if ! gh pr checks "$PR_NUMBER" --repo "$REPO" --watch; then
+  echo "❌ Checks failed. Not merging."
+  echo "PR: $PR_URL"
+  exit 1
+fi
+
+# Re-check mergeability (conflicts can still block)
+MERGEABLE="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json mergeable --jq '.mergeable')"
+if [[ "$MERGEABLE" == "CONFLICTING" ]]; then
+  echo "❌ Merge conflicts detected. Not merging."
+  echo "Resolve here: https://github.com/${REPO}/pull/${PR_NUMBER}/conflicts"
+  exit 1
+fi
+
+echo "✅ Checks passed and PR is mergeable. Merging now..."
+gh pr merge "$PR_NUMBER" --repo "$REPO" --squash --delete-branch=false
+
+echo "🎉 Merged: $PR_URL"
