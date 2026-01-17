@@ -1,0 +1,89 @@
+# This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests across different versions of node
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-nodejs
+
+name: Node.js CI
+
+on:
+  pull_request:
+    branches: ["main"]
+  push:
+    branches: ["main"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18.x, 20.x, 22.x]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build --if-present
+      - run: npm test
+        env:
+          CI: true
+
+      - name: Collect commit info
+        if: github.event_name == 'push' && matrix.node-version == '20.x'
+        id: info
+        run: |
+          echo "short_sha=$(git rev-parse --short ${{ github.sha }})" >> $GITHUB_OUTPUT
+          echo "subject=$(git log -1 --pretty=%s)" >> $GITHUB_OUTPUT
+
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          git log -1 --pretty=%B >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          git diff --name-status ${{ github.event.before }} ${{ github.sha }} >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Notify Discord
+        if: github.event_name == 'push' && matrix.node-version == '20.x'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          SUBJECT: ${{ steps.info.outputs.subject }}
+          BODY: ${{ steps.info.outputs.body }}
+          FILES_RAW: ${{ steps.info.outputs.files }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          node -e "
+          const fs = process.env.FILES_RAW.split('\n');
+          const max = 40;
+          const shown = fs.slice(0, max).join('\n');
+          const more = fs.length > max ? `\n...and ${fs.length - max} more` : '';
+          const files = shown + more;
+
+          const commitUrl = `https://github.com/${process.env.REPO}/commit/${process.env.SHA}`;
+          const compareUrl = `https://github.com/${process.env.REPO}/compare/${process.env.BEFORE}...${process.env.SHA}`;
+          const shortSha = process.env.SHA.slice(0, 7);
+
+          const payload = {
+            embeds: [
+              {
+                title: `✅ New push to main: ${process.env.SUBJECT}`,
+                url: commitUrl,
+                description:
+                  `**Repo:** ${process.env.REPO}\n` +
+                  `**SHA:** ${shortSha}\n\n` +
+                  `**Commit message:**\n${process.env.BODY}\n\n` +
+                  `**Files changed:**\n\`\`\`\n${files}\n\`\`\`\n` +
+                  `[View compare](${compareUrl})`,
+                color: 3066993
+              }
+            ]
+          };
+
+          process.stdout.write(JSON.stringify(payload));
+          " | curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL"
