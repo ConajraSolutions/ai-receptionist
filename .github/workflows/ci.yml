@@ -6,6 +6,9 @@ on:
   push:
     branches: ["main"]
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -19,40 +22,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Collect commit info
-        if: github.event_name == 'push' && matrix.node-version == '20.x'
-        id: info
-        run: |
-          echo "short_sha=$(git rev-parse --short '${{ github.sha }}')" >> "$GITHUB_OUTPUT"
-          echo "subject=$(git log -1 --pretty=%s)" >> "$GITHUB_OUTPUT"
-          echo "author=$(git log -1 --pretty=%an)" >> "$GITHUB_OUTPUT"
-
-          DELIM="__GHA_DELIM_$(date +%s)__"
-
-          {
-            echo "body<<$DELIM"
-            git log -1 --pretty=%B
-            echo "$DELIM"
-          } >> "$GITHUB_OUTPUT"
-
-          {
-            echo "files<<$DELIM"
-            git diff --name-status '${{ github.event.before }}' '${{ github.sha }}' || git show --name-status --pretty="" '${{ github.sha }}'
-            echo "$DELIM"
-          } >> "$GITHUB_OUTPUT"
-          
-          # Check if this is a merge commit from a PR
-          COMMIT_MESSAGE=$(git log -1 --pretty=%s)
-          if [[ "$COMMIT_MESSAGE" =~ ^Merge\ pull\ request\ #([0-9]+) ]] || [[ "$COMMIT_MESSAGE" =~ \(#([0-9]+)\)$ ]]; then
-            PR_NUMBER="${BASH_REMATCH[1]}"
-            echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
-            echo "is_pr_merge=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "is_pr_merge=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
@@ -60,9 +30,37 @@ jobs:
       - run: npm ci
 
       - name: Build
+        id: build
         run: npm run build --if-present
         env:
           CI: true
+        continue-on-error: true
+
+      - name: Fail + Discord (PR build failure)
+        if: github.event_name == 'pull_request' && steps.build.outcome == 'failure' && matrix.node-version == '20.x'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          test -n "$DISCORD_WEBHOOK_URL" || exit 0
+          PR_URL="https://github.com/${REPO}/pull/${PR_NUMBER}"
+
+          curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL" <<EOF
+          {
+            "embeds": [
+              {
+                "title": "🔨 Build failed",
+                "url": "${RUN_URL}",
+                "description": "**Repo:** ${REPO}\n**PR:** [#${PR_NUMBER} - ${PR_TITLE}](${PR_URL})\n\nBuild step failed.\n[View run](${RUN_URL})",
+                "color": 15158332
+              }
+            ]
+          }
+          EOF
+          exit 1
 
       - name: Test
         id: test
@@ -73,197 +71,61 @@ jobs:
           CI: true
         continue-on-error: true
 
-      - name: Check test result
-        id: check_test
-        run: |
-          if [ "${{ steps.test.outcome }}" == "failure" ]; then
-            echo "test_failed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "test_failed=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Notify Discord (PR test failure)
-        if: github.event_name == 'pull_request' && steps.check_test.outputs.test_failed == 'true' && matrix.node-version == '20.x'
+      - name: Fail + Discord (PR test failure)
+        if: github.event_name == 'pull_request' && steps.test.outcome == 'failure' && matrix.node-version == '20.x'
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_TITLE: ${{ github.event.pull_request.title }}
-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          test -n "$DISCORD_WEBHOOK_URL" || (echo "Missing DISCORD_WEBHOOK_URL secret" && exit 0)
+          test -n "$DISCORD_WEBHOOK_URL" || exit 1
 
-          # Read test output for the notification
-          if [ -f test-output.txt ]; then
-            export TEST_OUTPUT=$(tail -50 test-output.txt | head -c 1500)
-          else
-            export TEST_OUTPUT="(no output captured)"
-          fi
+          PR_URL="https://github.com/${REPO}/pull/${PR_NUMBER}"
+          LOGS=$(tail -50 test-output.txt | head -c 3500)
 
-          node <<'NODE' | curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL"
-          const prUrl = `https://github.com/${process.env.REPO}/pull/${process.env.PR_NUMBER}`;
-          const testOutput = process.env.TEST_OUTPUT || "(no output captured)";
-
+          node <<NODE | curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL"
           const payload = {
             embeds: [
               {
-                title: `❌ PR #${process.env.PR_NUMBER} TESTS FAILED`,
+                title: "❌ PR tests failed",
                 url: process.env.RUN_URL,
                 description:
-                  `**Repo:** ${process.env.REPO}\n` +
-                  `**PR:** [#${process.env.PR_NUMBER}](${prUrl}) - ${process.env.PR_TITLE || "(no title)"}\n` +
-                  `**Author:** ${process.env.PR_AUTHOR || "unknown"}\n\n` +
-                  `**Test output (last 50 lines):**\n\`\`\`\n${testOutput}\n\`\`\`\n` +
-                  `[View run](${process.env.RUN_URL})`,
+                  "**Repo:** ${REPO}\n" +
+                  "**PR:** [#${PR_NUMBER} - ${PR_TITLE}](${PR_URL})\n\n" +
+                  "```\n${LOGS}\n```\n" +
+                  "[View run](${RUN_URL})",
                 color: 15158332
               }
             ]
           };
-
-          process.stdout.write(JSON.stringify(payload));
+          console.log(JSON.stringify(payload));
           NODE
 
-      - name: Fail job if tests failed
-        if: steps.check_test.outputs.test_failed == 'true'
-        run: |
-          echo "Tests failed. Failing the job."
           exit 1
 
-      - name: Notify Discord (PR merged to main)
-        if: github.event_name == 'push' && matrix.node-version == '20.x' && success() && steps.info.outputs.is_pr_merge == 'true'
+      - name: Discord (PR CI success)
+        if: github.event_name == 'pull_request' && matrix.node-version == '20.x' && success()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          SUBJECT: ${{ steps.info.outputs.subject }}
-          AUTHOR: ${{ steps.info.outputs.author }}
-          BODY: ${{ steps.info.outputs.body }}
-          FILES_RAW: ${{ steps.info.outputs.files }}
           REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-          BEFORE: ${{ github.event.before }}
-          PR_NUMBER: ${{ steps.info.outputs.pr_number }}
-        run: |
-          test -n "$DISCORD_WEBHOOK_URL" || (echo "Missing DISCORD_WEBHOOK_URL secret" && exit 1)
-
-          node <<'NODE' | curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL"
-          const fs = (process.env.FILES_RAW || "").split("\n").filter(Boolean);
-          const max = 40;
-          const shown = fs.slice(0, max).join("\n");
-          const more = fs.length > max ? `\n...and ${fs.length - max} more` : "";
-          const files = shown + more;
-
-          const prUrl = `https://github.com/${process.env.REPO}/pull/${process.env.PR_NUMBER}`;
-          const compareUrl = `https://github.com/${process.env.REPO}/compare/${process.env.BEFORE}...${process.env.SHA}`;
-          const shortSha = (process.env.SHA || "").slice(0, 7);
-
-          const payload = {
-            embeds: [
-              {
-                title: `🎉 PR #${process.env.PR_NUMBER} MERGED: ${process.env.SUBJECT || "(no subject)"}`,
-                url: prUrl,
-                description:
-                  `**Repo:** ${process.env.REPO}\n` +
-                  `**Author:** ${process.env.AUTHOR || "unknown"}\n` +
-                  `**SHA:** ${shortSha}\n\n` +
-                  `**Commit message:**\n${process.env.BODY || ""}\n\n` +
-                  `**Files changed:**\n\`\`\`\n${files}\n\`\`\`\n` +
-                  `[View PR](${prUrl}) | [View compare](${compareUrl})`,
-                color: 5763719
-              }
-            ]
-          };
-
-          process.stdout.write(JSON.stringify(payload));
-          NODE
-
-      - name: Notify Discord (success - direct commit)
-        if: github.event_name == 'push' && matrix.node-version == '20.x' && success() && steps.info.outputs.is_pr_merge != 'true'
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          SUBJECT: ${{ steps.info.outputs.subject }}
-          AUTHOR: ${{ steps.info.outputs.author }}
-          BODY: ${{ steps.info.outputs.body }}
-          FILES_RAW: ${{ steps.info.outputs.files }}
-          REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-          BEFORE: ${{ github.event.before }}
-        run: |
-          test -n "$DISCORD_WEBHOOK_URL" || (echo "Missing DISCORD_WEBHOOK_URL secret" && exit 1)
-
-          node <<'NODE' | curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL"
-          const fs = (process.env.FILES_RAW || "").split("\n").filter(Boolean);
-          const max = 40;
-          const shown = fs.slice(0, max).join("\n");
-          const more = fs.length > max ? `\n...and ${fs.length - max} more` : "";
-          const files = shown + more;
-
-          const commitUrl = `https://github.com/${process.env.REPO}/commit/${process.env.SHA}`;
-          const compareUrl = `https://github.com/${process.env.REPO}/compare/${process.env.BEFORE}...${process.env.SHA}`;
-          const shortSha = (process.env.SHA || "").slice(0, 7);
-
-          const payload = {
-            embeds: [
-              {
-                title: `✅ CI PASSED: ${process.env.SUBJECT || "(no subject)"}`,
-                url: commitUrl,
-                description:
-                  `**Repo:** ${process.env.REPO}\n` +
-                  `**Author:** ${process.env.AUTHOR || "unknown"}\n` +
-                  `**SHA:** ${shortSha}\n\n` +
-                  `**Commit message:**\n${process.env.BODY || ""}\n\n` +
-                  `**Files changed:**\n\`\`\`\n${files}\n\`\`\`\n` +
-                  `[View compare](${compareUrl})`,
-                color: 3066993
-              }
-            ]
-          };
-
-          process.stdout.write(JSON.stringify(payload));
-          NODE
-
-      - name: Notify Discord (failure)
-        if: github.event_name == 'push' && matrix.node-version == '20.x' && failure()
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          SUBJECT: ${{ steps.info.outputs.subject }}
-          AUTHOR: ${{ steps.info.outputs.author }}
-          BODY: ${{ steps.info.outputs.body }}
-          FILES_RAW: ${{ steps.info.outputs.files }}
-          REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-          BEFORE: ${{ github.event.before }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          test -n "$DISCORD_WEBHOOK_URL" || (echo "Missing DISCORD_WEBHOOK_URL secret" && exit 1)
+          test -n "$DISCORD_WEBHOOK_URL" || exit 0
+          PR_URL="https://github.com/${REPO}/pull/${PR_NUMBER}"
 
-          node <<'NODE' | curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL"
-          const fs = (process.env.FILES_RAW || "").split("\n").filter(Boolean);
-          const max = 40;
-          const shown = fs.slice(0, max).join("\n");
-          const more = fs.length > max ? `\n...and ${fs.length - max} more` : "";
-          const files = shown + more;
-
-          const commitUrl = `https://github.com/${process.env.REPO}/commit/${process.env.SHA}`;
-          const compareUrl = `https://github.com/${process.env.REPO}/compare/${process.env.BEFORE}...${process.env.SHA}`;
-          const shortSha = (process.env.SHA || "").slice(0, 7);
-
-          const payload = {
-            embeds: [
+          curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL" <<EOF
+          {
+            "embeds": [
               {
-                title: `❌ CI FAILED: ${process.env.SUBJECT || "(no subject)"}`,
-                url: process.env.RUN_URL || commitUrl,
-                description:
-                  `**Repo:** ${process.env.REPO}\n` +
-                  `**Author:** ${process.env.AUTHOR || "unknown"}\n` +
-                  `**SHA:** ${shortSha}\n\n` +
-                  `**Commit message:**\n${process.env.BODY || ""}\n\n` +
-                  `**Files changed:**\n\`\`\`\n${files}\n\`\`\`\n` +
-                  `[View run](${process.env.RUN_URL})\n` +
-                  `[View compare](${compareUrl})`,
-                color: 15158332
+                "title": "✅ CI passed",
+                "url": "${RUN_URL}",
+                "description": "**Repo:** ${REPO}\n**PR:** [#${PR_NUMBER} - ${PR_TITLE}](${PR_URL})\n\nAll checks passed.\n[View run](${RUN_URL})",
+                "color": 3066993
               }
             ]
-          };
-
-          process.stdout.write(JSON.stringify(payload));
-          NODE
+          }
+          EOF
