@@ -1,10 +1,8 @@
-name: Auto-Merge PR
+name: Enable auto-merge for labeled PRs
 
 on:
-  pull_request:
-    types: [labeled, synchronize, reopened]
-    branches: [main]
-  check_suite:
+  workflow_run:
+    workflows: ["Node.js CI"]
     types: [completed]
 
 permissions:
@@ -12,133 +10,96 @@ permissions:
   pull-requests: write
 
 jobs:
-  auto_merge:
+  enable_auto_merge:
     runs-on: ubuntu-latest
-    if: |
-      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'auto')) ||
-      (github.event_name == 'check_suite' && github.event.check_suite.conclusion == 'success')
-    
+    if: github.event.workflow_run.conclusion == 'success'
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Get PR number
-        id: get_pr
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Get PR number (from workflow_run)
+        id: pr
         run: |
-          if [ "${{ github.event_name }}" == "check_suite" ]; then
-            # Get PR associated with this check suite
-            PR_NUMBER=$(gh pr list --json number,headRefOid --jq ".[] | select(.headRefOid == \"${{ github.event.check_suite.head_sha }}\") | .number" | head -1)
-          else
-            PR_NUMBER="${{ github.event.pull_request.number }}"
-          fi
-          
+          PR_NUMBER="${{ github.event.workflow_run.pull_requests[0].number }}"
           if [ -z "$PR_NUMBER" ]; then
-            echo "No PR found"
+            echo "No PR associated with this run."
             exit 0
           fi
-          
           echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
-          echo "Found PR #$PR_NUMBER"
 
-      - name: Check if PR has auto label
-        id: check_label
-        if: steps.get_pr.outputs.number != ''
+      - name: Check PR has 'auto' label
+        id: label
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PR_NUMBER="${{ steps.get_pr.outputs.number }}"
-          HAS_AUTO_LABEL=$(gh pr view "$PR_NUMBER" --json labels --jq '[.labels[].name] | contains(["auto"])')
-          echo "has_label=$HAS_AUTO_LABEL" >> "$GITHUB_OUTPUT"
-          echo "Has auto label: $HAS_AUTO_LABEL"
+          PR_NUMBER="${{ steps.pr.outputs.number }}"
+          HAS=$(gh pr view "$PR_NUMBER" --json labels --jq '[.labels[].name] | contains(["auto"])')
+          echo "has_auto=$HAS" >> "$GITHUB_OUTPUT"
 
-      - name: Wait for checks and enable auto-merge
-        if: steps.check_label.outputs.has_label == 'true' && steps.get_pr.outputs.number != ''
+      - name: Check mergeability
+        id: mergeable
+        if: steps.label.outputs.has_auto == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PR_NUMBER="${{ steps.get_pr.outputs.number }}"
-          
-          echo "Checking current status of PR #$PR_NUMBER..."
-          
-          # Get PR status with details
-          PR_STATUS=$(gh pr view "$PR_NUMBER" --json statusCheckRollup --jq '.statusCheckRollup')
-          
-          # Show all checks
-          echo "=== All Checks ==="
-          echo "$PR_STATUS" | jq -r '.[] | "\(.context // .name): \(.status // .state) - \(.conclusion // "N/A")"'
-          echo "=================="
-          
-          # Wait up to 10 minutes for checks to complete
-          TIMEOUT=600
-          ELAPSED=0
-          INTERVAL=10
-          
-          while [ $ELAPSED -lt $TIMEOUT ]; do
-            PR_STATUS=$(gh pr view "$PR_NUMBER" --json statusCheckRollup --jq '.statusCheckRollup')
+          PR_NUMBER="${{ steps.pr.outputs.number }}"
+          sleep 2
+          M=$(gh pr view "$PR_NUMBER" --json mergeable --jq '.mergeable')
+          echo "mergeable=$M" >> "$GITHUB_OUTPUT"
 
-            # Count pending/in-progress checks (exclude self-referential workflow checks)
-            PENDING=$(echo "$PR_STATUS" | jq '[.[] | select((.context // .name | test("auto_merge|open_pr"; "i") | not) and (.status == "PENDING" or .status == "IN_PROGRESS" or .state == "PENDING"))] | length')
-
-            if [ "$PENDING" -eq 0 ]; then
-              echo "All checks completed!"
-              break
-            fi
-
-            # Show what we're waiting for
-            echo "Still waiting... ($PENDING checks pending/in-progress)"
-            echo "$PR_STATUS" | jq -r '.[] | select((.context // .name | test("auto_merge|open_pr"; "i") | not) and (.status == "PENDING" or .status == "IN_PROGRESS" or .state == "PENDING")) | "  - \(.context // .name): \(.status // .state)"'
-
-            sleep $INTERVAL
-            ELAPSED=$((ELAPSED + INTERVAL))
-          done
-
-          if [ $ELAPSED -ge $TIMEOUT ]; then
-            echo "Timeout waiting for checks. Not enabling auto-merge."
-            exit 0
-          fi
-
-          # Check if all required checks passed (exclude self-referential workflow checks)
-          FAILED=$(echo "$PR_STATUS" | jq '[.[] | select((.context // .name | test("auto_merge|open_pr"; "i") | not) and (.conclusion == "FAILURE" or .conclusion == "CANCELLED"))] | length')
-          
-          if [ "$FAILED" -gt 0 ]; then
-            echo "Some checks failed. Not enabling auto-merge."
-            echo "$PR_STATUS" | jq -r '.[] | select((.context // .name | test("auto_merge|open_pr"; "i") | not) and (.conclusion == "FAILURE" or .conclusion == "CANCELLED")) | "  ❌ \(.context // .name): \(.conclusion)"'
-            gh pr comment "$PR_NUMBER" --body "❌ CI checks failed. Auto-merge will not be enabled."
-            exit 0
-          fi
-          
-          # Enable auto-merge
-          echo "Enabling auto-merge for PR #$PR_NUMBER"
-          gh pr merge "$PR_NUMBER" --auto --squash --delete-branch
-          
-          # Add a comment
-          gh pr comment "$PR_NUMBER" --body "✅ CI passed! Auto-merge enabled. This PR will merge automatically once all requirements are met."
-
-      - name: Notify Discord
-        if: steps.check_label.outputs.has_label == 'true' && steps.get_pr.outputs.number != ''
+      - name: Discord (conflicts)
+        if: steps.label.outputs.has_auto == 'true' && steps.mergeable.outputs.mergeable == 'CONFLICTING'
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          PR_NUMBER: ${{ steps.get_pr.outputs.number }}
-          PR_TITLE: ${{ steps.conflicts.outputs.pr_title }}
           REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
-            PR_URL="https://github.com/${REPO}/pull/${PR_NUMBER}"
-            PR_TITLE=$(gh pr view "$PR_NUMBER" --json title --jq '.title')
-            PR_AUTHOR=$(gh pr view "$PR_NUMBER" --json author --jq '.author.login')
-            
-            curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL" <<EOF
+          test -n "$DISCORD_WEBHOOK_URL" || exit 0
+          PR_URL="https://github.com/${REPO}/pull/${PR_NUMBER}"
+          CONFLICT_URL="https://github.com/${REPO}/pull/${PR_NUMBER}/conflicts"
+          TITLE=$(gh pr view "$PR_NUMBER" --json title --jq '.title')
+
+          curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL" <<EOF
           {
             "embeds": [
               {
-                "title": "🔀 Auto-merge enabled: PR #${PR_NUMBER}",
+                "title": "⚠️ Merge blocked by conflicts",
                 "url": "${PR_URL}",
-                "description": "**Repo:** ${REPO}\n**Author:** ${PR_AUTHOR}\n**PR:** #${PR_NUMBER}\n\nCI passed! PR will merge automatically.",
+                "description": "**Repo:** ${REPO}\n**PR:** #${PR_NUMBER} - ${TITLE}\n\n[Open conflict editor](${CONFLICT_URL})",
+                "color": 16744448
+              }
+            ]
+          }
+          EOF
+
+      - name: Enable auto-merge (no branch deletion)
+        if: steps.label.outputs.has_auto == 'true' && steps.mergeable.outputs.mergeable != 'CONFLICTING'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.pr.outputs.number }}"
+          # This enables auto-merge. It will NOT delete the branch unless you pass --delete-branch.
+          gh pr merge "$PR_NUMBER" --auto --squash
+
+      - name: Discord (auto-merge enabled)
+        if: steps.label.outputs.has_auto == 'true' && steps.mergeable.outputs.mergeable != 'CONFLICTING'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          test -n "$DISCORD_WEBHOOK_URL" || exit 0
+          PR_URL="https://github.com/${REPO}/pull/${PR_NUMBER}"
+          TITLE=$(gh pr view "$PR_NUMBER" --json title --jq '.title')
+
+          curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL" <<EOF
+          {
+            "embeds": [
+              {
+                "title": "🔀 Auto-merge enabled",
+                "url": "${PR_URL}",
+                "description": "**Repo:** ${REPO}\n**PR:** #${PR_NUMBER} - ${TITLE}\n\nCI passed. This PR will merge automatically when GitHub allows it.",
                 "color": 5793266
               }
             ]
           }
           EOF
-          fi
