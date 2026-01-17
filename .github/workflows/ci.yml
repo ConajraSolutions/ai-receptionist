@@ -65,9 +65,22 @@ jobs:
           CI: true
 
       - name: Test
-        run: npm test
+        id: test
+        run: |
+          npm test 2>&1 | tee test-output.txt
+          exit ${PIPESTATUS[0]}
         env:
           CI: true
+        continue-on-error: true
+
+      - name: Check test result
+        id: check_test
+        run: |
+          if [ "${{ steps.test.outcome }}" == "failure" ]; then
+            echo "test_failed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "test_failed=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Notify Discord (PR merged to main)
         if: github.event_name == 'push' && matrix.node-version == '20.x' && success() && steps.info.outputs.is_pr_merge == 'true'

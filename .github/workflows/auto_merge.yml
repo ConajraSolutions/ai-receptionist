@@ -120,6 +120,7 @@ jobs:
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           PR_NUMBER: ${{ steps.get_pr.outputs.number }}
+          PR_TITLE: ${{ steps.conflicts.outputs.pr_title }}
           REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
