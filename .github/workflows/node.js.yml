@@ -19,18 +19,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: npm
-
-      - run: npm ci
-      - run: npm run build --if-present
-      - run: npm test
-        env:
-          CI: true
-
       - name: Collect commit info
         if: github.event_name == 'push' && matrix.node-version == '20.x'
         id: info
@@ -53,8 +41,26 @@ jobs:
             echo "$DELIM"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Notify Discord
-        if: github.event_name == 'push' && matrix.node-version == '20.x'
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build
+        run: npm run build --if-present
+        env:
+          CI: true
+
+      - name: Test
+        run: npm test
+        env:
+          CI: true
+
+      - name: Notify Discord (success)
+        if: github.event_name == 'push' && matrix.node-version == '20.x' && success()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           SUBJECT: ${{ steps.info.outputs.subject }}
@@ -81,16 +87,63 @@ jobs:
           const payload = {
             embeds: [
               {
-                title: `✅ New push to main: ${process.env.SUBJECT || "(no subject)"}`,
+                title: `✅ CI PASSED: ${process.env.SUBJECT || "(no subject)"}`,
                 url: commitUrl,
                 description:
                   `**Repo:** ${process.env.REPO}\n` +
-                  `**SHA:** ${shortSha}\n\n` +
                   `**Author:** ${process.env.AUTHOR || "unknown"}\n` +
+                  `**SHA:** ${shortSha}\n\n` +
                   `**Commit message:**\n${process.env.BODY || ""}\n\n` +
                   `**Files changed:**\n\`\`\`\n${files}\n\`\`\`\n` +
                   `[View compare](${compareUrl})`,
                 color: 3066993
+              }
+            ]
+          };
+
+          process.stdout.write(JSON.stringify(payload));
+          NODE
+
+      - name: Notify Discord (failure)
+        if: github.event_name == 'push' && matrix.node-version == '20.x' && failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          SUBJECT: ${{ steps.info.outputs.subject }}
+          AUTHOR: ${{ steps.info.outputs.author }}
+          BODY: ${{ steps.info.outputs.body }}
+          FILES_RAW: ${{ steps.info.outputs.files }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          BEFORE: ${{ github.event.before }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          test -n "$DISCORD_WEBHOOK_URL" || (echo "Missing DISCORD_WEBHOOK_URL secret" && exit 1)
+
+          node <<'NODE' | curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL"
+          const fs = (process.env.FILES_RAW || "").split("\n").filter(Boolean);
+          const max = 40;
+          const shown = fs.slice(0, max).join("\n");
+          const more = fs.length > max ? `\n...and ${fs.length - max} more` : "";
+          const files = shown + more;
+
+          const commitUrl = `https://github.com/${process.env.REPO}/commit/${process.env.SHA}`;
+          const compareUrl = `https://github.com/${process.env.REPO}/compare/${process.env.BEFORE}...${process.env.SHA}`;
+          const shortSha = (process.env.SHA || "").slice(0, 7);
+
+          const payload = {
+            embeds: [
+              {
+                title: `❌ CI FAILED: ${process.env.SUBJECT || "(no subject)"}`,
+                url: process.env.RUN_URL || commitUrl,
+                description:
+                  `**Repo:** ${process.env.REPO}\n` +
+                  `**Author:** ${process.env.AUTHOR || "unknown"}\n` +
+                  `**SHA:** ${shortSha}\n\n` +
+                  `**Commit message:**\n${process.env.BODY || ""}\n\n` +
+                  `**Files changed:**\n\`\`\`\n${files}\n\`\`\`\n` +
+                  `[View run](${process.env.RUN_URL})\n` +
+                  `[View compare](${compareUrl})`,
+                color: 15158332
               }
             ]
           };
