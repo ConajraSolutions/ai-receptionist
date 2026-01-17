@@ -40,6 +40,16 @@ jobs:
             git diff --name-status '${{ github.event.before }}' '${{ github.sha }}' || git show --name-status --pretty="" '${{ github.sha }}'
             echo "$DELIM"
           } >> "$GITHUB_OUTPUT"
+          
+          # Check if this is a merge commit from a PR
+          COMMIT_MESSAGE=$(git log -1 --pretty=%s)
+          if [[ "$COMMIT_MESSAGE" =~ ^Merge\ pull\ request\ #([0-9]+) ]] || [[ "$COMMIT_MESSAGE" =~ \(#([0-9]+)\)$ ]]; then
+            PR_NUMBER="${BASH_REMATCH[1]}"
+            echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+            echo "is_pr_merge=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_pr_merge=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
@@ -59,8 +69,54 @@ jobs:
         env:
           CI: true
 
-      - name: Notify Discord (success)
-        if: github.event_name == 'push' && matrix.node-version == '20.x' && success()
+      - name: Notify Discord (PR merged to main)
+        if: github.event_name == 'push' && matrix.node-version == '20.x' && success() && steps.info.outputs.is_pr_merge == 'true'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          SUBJECT: ${{ steps.info.outputs.subject }}
+          AUTHOR: ${{ steps.info.outputs.author }}
+          BODY: ${{ steps.info.outputs.body }}
+          FILES_RAW: ${{ steps.info.outputs.files }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          BEFORE: ${{ github.event.before }}
+          PR_NUMBER: ${{ steps.info.outputs.pr_number }}
+        run: |
+          test -n "$DISCORD_WEBHOOK_URL" || (echo "Missing DISCORD_WEBHOOK_URL secret" && exit 1)
+
+          node <<'NODE' | curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL"
+          const fs = (process.env.FILES_RAW || "").split("\n").filter(Boolean);
+          const max = 40;
+          const shown = fs.slice(0, max).join("\n");
+          const more = fs.length > max ? `\n...and ${fs.length - max} more` : "";
+          const files = shown + more;
+
+          const prUrl = `https://github.com/${process.env.REPO}/pull/${process.env.PR_NUMBER}`;
+          const compareUrl = `https://github.com/${process.env.REPO}/compare/${process.env.BEFORE}...${process.env.SHA}`;
+          const shortSha = (process.env.SHA || "").slice(0, 7);
+
+          const payload = {
+            embeds: [
+              {
+                title: `🎉 PR #${process.env.PR_NUMBER} MERGED: ${process.env.SUBJECT || "(no subject)"}`,
+                url: prUrl,
+                description:
+                  `**Repo:** ${process.env.REPO}\n` +
+                  `**Author:** ${process.env.AUTHOR || "unknown"}\n` +
+                  `**SHA:** ${shortSha}\n\n` +
+                  `**Commit message:**\n${process.env.BODY || ""}\n\n` +
+                  `**Files changed:**\n\`\`\`\n${files}\n\`\`\`\n` +
+                  `[View PR](${prUrl}) | [View compare](${compareUrl})`,
+                color: 5763719
+              }
+            ]
+          };
+
+          process.stdout.write(JSON.stringify(payload));
+          NODE
+
+      - name: Notify Discord (success - direct commit)
+        if: github.event_name == 'push' && matrix.node-version == '20.x' && success() && steps.info.outputs.is_pr_merge != 'true'
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           SUBJECT: ${{ steps.info.outputs.subject }}
