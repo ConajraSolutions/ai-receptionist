@@ -6,14 +6,18 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
   open_pr:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
 
       - name: Ensure 'auto' label exists
         env:
@@ -54,3 +58,42 @@ jobs:
         if: steps.check_pr.outputs.exists != '0'
         run: |
           echo "PR from ${{ github.ref_name }} to main already exists. Skipping creation."
+
+      - name: Check if branch is behind main
+        id: check_behind
+        run: |
+          git fetch origin main
+          BEHIND=$(git rev-list --count HEAD..origin/main)
+          echo "behind=$BEHIND" >> "$GITHUB_OUTPUT"
+          echo "Branch is $BEHIND commits behind main"
+
+      - name: Merge main into branch
+        id: merge
+        if: steps.check_behind.outputs.behind != '0'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git merge origin/main --no-edit; then
+            echo "success=true" >> "$GITHUB_OUTPUT"
+            echo "Successfully merged main into branch"
+          else
+            git merge --abort
+            echo "success=false" >> "$GITHUB_OUTPUT"
+            echo "Merge conflict detected"
+          fi
+
+      - name: Push merged branch
+        if: steps.check_behind.outputs.behind != '0' && steps.merge.outputs.success == 'true'
+        run: |
+          git push origin ${{ github.ref_name }}
+          echo "Pushed updated branch with main merged in"
+
+      - name: Notify Discord (merge conflict)
+        if: steps.check_behind.outputs.behind != '0' && steps.merge.outputs.success == 'false'
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d "{\"content\": \"⚠️ **Merge Conflict** in branch \`${{ github.ref_name }}\`\n\nCould not automatically merge \`main\` into the feature branch.\n\n**Repository:** ${{ github.repository }}\n**Actor:** ${{ github.actor }}\n**Branch:** ${{ github.ref_name }}\n\nPlease resolve the conflicts manually.\"}" \
+            "$DISCORD_WEBHOOK"
