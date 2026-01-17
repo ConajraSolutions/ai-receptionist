@@ -56,3 +56,27 @@ The system receives function calls from Vapi as POST requests to `/vapi/webhook`
 - Interfaces/types: snake_case (e.g., `vapi_function_call`)
 - Methods: snake_case (e.g., `handle_webhook`, `book_appointment`)
 - File headers include "Conajra Solutions © 2026" and author attribution
+
+## Code Commenting Best Practices
+
+Follow these 9 rules when writing comments (based on Stack Overflow's best practices):
+
+1. **Comments should not duplicate the code** - Avoid redundant comments like `i = i + 1; // Add one to i`. They add clutter and become outdated.
+
+2. **Good comments do not excuse unclear code** - Don't comment a poorly named variable; rename it instead. "Don't comment bad code — rewrite it."
+
+3. **If you can't write a clear comment, there may be a problem with the code** - Struggling to explain code often means it's too clever. Simplify it.
+
+4. **Comments should dispel confusion, not cause it** - If a comment causes confusion rather than clarity, remove it.
+
+5. **Explain unidiomatic code in comments** - When code looks redundant but is necessary, explain why to prevent future "simplification."
+
+6. **Provide links to the original source of copied code** - Include Stack Overflow URLs or other sources for context and attribution.
+
+7. **Include links to external references where helpful** - Link to standards (RFCs), documentation, or tutorials where the code implements them.
+
+8. **Add comments when fixing bugs** - Document browser-specific workarounds, edge cases, and reference issue tracker numbers.
+
+9. **Use comments to mark incomplete implementations** - Use `TODO` comments to flag known limitations; link to issue tracker tickets when possible.
+
+**Key principle:** "Code Tells You How, Comments Tell You Why." Comments complement good code by providing context that the code itself cannot express.
