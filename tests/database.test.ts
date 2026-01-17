@@ -5,7 +5,7 @@
 
 import * as fs from "fs/promises";
 import * as path from "path";
-import { db } from "./index";
+import { db } from "../src/modules/database";
 
 describe("db", () => {
 
@@ -35,15 +35,15 @@ describe("db", () => {
 
         it("should write data to a JSON file", async () => {
             const data = { name: "test", value: 123 };
-            await store.write("test.json", data);
+            await store.write("test", data);
 
             const content = await fs.readFile(path.join(test_dir, "test.json"), "utf-8");
             expect(JSON.parse(content)).toEqual(data);
         });
 
         it("should overwrite existing file", async () => {
-            await store.write("test.json", { old: true });
-            await store.write("test.json", { new: true });
+            await store.write("test", { old: true });
+            await store.write("test", { new: true });
 
             const content = await fs.readFile(path.join(test_dir, "test.json"), "utf-8");
             expect(JSON.parse(content)).toEqual({ new: true });
@@ -57,19 +57,19 @@ describe("db", () => {
             const data = { name: "test", value: 456 };
             await fs.writeFile(path.join(test_dir, "read.json"), JSON.stringify(data));
 
-            const result = await store.read<typeof data>("read.json");
+            const result = await store.read<typeof data>("read");
             expect(result).toEqual(data);
         });
 
         it("should return null when file does not exist", async () => {
-            const result = await store.read("nonexistent.json");
+            const result = await store.read("nonexistent");
             expect(result).toBeNull();
         });
 
         it("should return null when file contains invalid JSON", async () => {
             await fs.writeFile(path.join(test_dir, "invalid.json"), "not valid json {{{");
 
-            const result = await store.read("invalid.json");
+            const result = await store.read("invalid");
             expect(result).toBeNull();
         });
 
@@ -80,12 +80,12 @@ describe("db", () => {
         it("should return true when file exists", async () => {
             await fs.writeFile(path.join(test_dir, "exists.json"), "{}");
 
-            const result = await store.exists("exists.json");
+            const result = await store.exists("exists");
             expect(result).toBe(true);
         });
 
         it("should return false when file does not exist", async () => {
-            const result = await store.exists("missing.json");
+            const result = await store.exists("missing");
             expect(result).toBe(false);
         });
 
@@ -96,7 +96,7 @@ describe("db", () => {
         it("should delete existing file", async () => {
             await fs.writeFile(path.join(test_dir, "delete.json"), "{}");
 
-            await store.delete("delete.json");
+            await store.delete("delete");
 
             const exists = await fs.access(path.join(test_dir, "delete.json"))
                 .then(() => true)
@@ -105,7 +105,7 @@ describe("db", () => {
         });
 
         it("should throw when file does not exist", async () => {
-            await expect(store.delete("nonexistent.json")).rejects.toThrow();
+            await expect(store.delete("nonexistent")).rejects.toThrow();
         });
 
     });

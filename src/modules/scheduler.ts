@@ -1,7 +1,16 @@
 // Conajra Solutions © 2026
 // TODO: hamza will do this
 
+import { storage } from "./storage.js";
+
 export class scheduler {
+
+    private m_storage: storage;
+
+    constructor(storage: storage)
+    {
+        this.m_storage = storage;
+    }
 
     async book_appointment()
     {
@@ -13,4 +22,4 @@ export class scheduler {
         return true;
     }
 
-}; // export 
+} 

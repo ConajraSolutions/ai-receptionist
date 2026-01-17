@@ -4,15 +4,21 @@
 module.exports = {
     preset: "ts-jest",
     testEnvironment: "node",
-    roots: ["<rootDir>/src"],
+    roots: ["<rootDir>"],
     testMatch: ["**/*.test.ts"],
-    collectCoverageFrom: ["src/modules/storage/**/*.ts", "!src/**/*.test.ts"],
+    collectCoverageFrom: ["tests/*.test.ts"],
     coverageThreshold: {
-        "src/modules/storage/db/index.ts": {
+        "src/modules/database.ts": {
             branches: 100,
             functions: 100,
             lines: 100,
             statements: 100
-        }
+        },
+        "src/modules/redis_client.ts": {
+            branches: 100,
+            functions: 100,
+            lines: 100,
+            statements: 100
+        } 
     }
 };

@@ -8,4 +8,3 @@ echo "build successful!"
 
 echo "running tests ..."
 npm test
-echo "tests passed!"

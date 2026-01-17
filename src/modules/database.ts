@@ -12,9 +12,9 @@ export class db {
 
     constructor(base_path: string) { this.base_path = base_path; }
 
-    async read<T>(file_name: string): Promise<T | null> 
+    async read<T>(tenant_id: string): Promise<T | null> 
     {
-        const file_path = path.join(this.base_path, file_name);
+        const file_path = path.join(this.base_path, `${tenant_id}.json`);
         try 
         {
             const data = await fs.readFile(file_path, "utf-8");
@@ -23,15 +23,15 @@ export class db {
         catch { return null; }
     }
 
-    async write<T>(file_name: string, data: T): Promise<void> 
+    async write<T>(tenant_id: string, data: T): Promise<void> 
     {
-        const file_path = path.join(this.base_path, file_name);
+        const file_path = path.join(this.base_path, `${tenant_id}.json`);
         await fs.writeFile(file_path, JSON.stringify(data, null, 2), "utf-8");
     }
 
-    async exists(file_name: string): Promise<boolean> 
+    async exists(tenant_id: string): Promise<boolean> 
     {
-        const file_path = path.join(this.base_path, file_name);
+        const file_path = path.join(this.base_path, `${tenant_id}.json`);
         try 
         {
             await fs.access(file_path);
@@ -39,9 +39,9 @@ export class db {
         } catch { return false; }
     }
 
-    async delete(file_name: string): Promise<void> 
+    async delete(tenant_id: string): Promise<void> 
     {
-        const file_path = path.join(this.base_path, file_name);
+        const file_path = path.join(this.base_path, `${tenant_id}.json`);
         await fs.unlink(file_path);
     }
 

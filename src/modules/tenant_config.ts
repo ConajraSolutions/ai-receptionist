@@ -3,15 +3,8 @@
 
 // this is a structured format for sotring tenant configs usinf the db module
 
-import { db } from "./index.js";
-
-export interface tenant_config 
-{
-    tenant_id: string;
-    name: string;
-    vapi_assistant_id: string;
-    calendar_credentials: object;
-}
+import { db } from "./database.js";
+import { tenant_config } from "../types/tenant_config_type.js";
 
 export class tenant_config_store {
 
@@ -43,5 +36,4 @@ export class tenant_config_store {
     {
         await this.store.delete(this.get_file_name(tenant_id));
     }
-
 }
