@@ -1,0 +1,111 @@
+name: Auto-Merge PR
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+  workflow_run:
+    workflows: ["Node.js CI"]
+    types: [completed]
+    branches-ignore:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+
+jobs:
+  auto_merge:
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'auto'))
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get PR number
+        id: get_pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_run" ]; then
+            BRANCH="${{ github.event.workflow_run.head_branch }}"
+            PR_NUMBER=$(gh pr list --head "$BRANCH" --base main --json number --jq '.[0].number')
+          else
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+          fi
+          
+          echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "Found PR #$PR_NUMBER"
+
+      - name: Check CI status
+        id: check_ci
+        if: steps.get_pr.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.get_pr.outputs.number }}"
+          
+          # Get the latest commit SHA for the PR
+          PR_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
+          
+          # Check if all required checks have passed
+          CHECKS_PASSED=$(gh api \
+            "/repos/${{ github.repository }}/commits/$PR_SHA/check-runs" \
+            --jq '[.check_runs[] | select(.name == "test" or .name == "build")] | all(.conclusion == "success")')
+          
+          echo "passed=$CHECKS_PASSED" >> "$GITHUB_OUTPUT"
+          echo "CI checks passed: $CHECKS_PASSED"
+
+      - name: Enable auto-merge
+        if: steps.check_ci.outputs.passed == 'true' && steps.get_pr.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.get_pr.outputs.number }}"
+          
+          # Check if PR has 'auto' label
+          HAS_AUTO_LABEL=$(gh pr view "$PR_NUMBER" --json labels --jq '[.labels[].name] | contains(["auto"])')
+          
+          if [ "$HAS_AUTO_LABEL" == "true" ]; then
+            echo "Enabling auto-merge for PR #$PR_NUMBER"
+            gh pr merge "$PR_NUMBER" --auto --squash --delete-branch
+            
+            # Add a comment
+            gh pr comment "$PR_NUMBER" --body "✅ CI passed! Auto-merge enabled. This PR will merge automatically."
+          else
+            echo "PR #$PR_NUMBER does not have 'auto' label, skipping auto-merge"
+          fi
+
+      - name: Notify Discord (auto-merge enabled)
+        if: steps.check_ci.outputs.passed == 'true' && steps.get_pr.outputs.number != ''
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          PR_NUMBER: ${{ steps.get_pr.outputs.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+            PR_URL="https://github.com/${REPO}/pull/${PR_NUMBER}"
+            PR_TITLE=$(gh pr view "$PR_NUMBER" --json title --jq '.title')
+            PR_AUTHOR=$(gh pr view "$PR_NUMBER" --json author --jq '.author.login')
+            
+            node <<'NODE' | curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL"
+            const payload = {
+              embeds: [
+                {
+                  title: `🔀 Auto-merge enabled: PR #${process.env.PR_NUMBER}`,
+                  url: process.env.PR_URL || "",
+                  description:
+                    `**Repo:** ${process.env.REPO}\n` +
+                    `**Author:** ${process.env.PR_AUTHOR || "unknown"}\n` +
+                    `**PR:** #${process.env.PR_NUMBER}\n\n` +
+                    `CI passed! PR will merge automatically.`,
+                  color: 5793266
+                }
+              ]
+            };
+            process.stdout.write(JSON.stringify(payload));
+NODE
+          fi
