@@ -45,7 +45,7 @@ app.post("/vapi/webhook", async (req, res) =>
 
 async function shutdown()
 {
-    console.log("shutting down.............");
+    console.log("shutting down...............");
     await call_mediator.disconnect();
     process.exit(0);
 }
