@@ -97,3 +97,113 @@ jobs:
           curl -H "Content-Type: application/json" \
             -d "{\"content\": \"⚠️ **Merge Conflict** in branch \`${{ github.ref_name }}\`\n\nCould not automatically merge \`main\` into the feature branch.\n\n**Repository:** ${{ github.repository }}\n**Actor:** ${{ github.actor }}\n**Branch:** ${{ github.ref_name }}\n\nPlease resolve the conflicts manually.\"}" \
             "$DISCORD_WEBHOOK"
+
+      - name: Get PR number
+        id: get_pr
+        if: steps.merge.outputs.success != 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER=$(gh pr list --head "${{ github.ref_name }}" --base main --json number --jq '.[0].number')
+          echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "Found PR #$PR_NUMBER"
+
+      - name: Wait for CI to pass
+        id: wait_ci
+        if: steps.get_pr.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.get_pr.outputs.number }}"
+          echo "Waiting for CI checks on PR #$PR_NUMBER..."
+
+          # Initial wait for GitHub to queue CI checks (30 seconds)
+          echo "Waiting 30 seconds for CI to be queued..."
+          sleep 30
+
+          # Wait up to 15 minutes for CI (90 iterations * 10 seconds)
+          for i in $(seq 1 90); do
+            # Get all check statuses
+            CHECKS=$(gh pr checks "$PR_NUMBER" --json name,state 2>/dev/null || echo "[]")
+
+            # Debug: show raw output
+            echo "Raw checks: $CHECKS"
+
+            if [ "$CHECKS" = "[]" ] || [ -z "$CHECKS" ]; then
+              echo "No checks found yet, waiting... (iteration $i/90)"
+              sleep 10
+              continue
+            fi
+
+            # Exclude our own workflow from the checks
+            FILTERED_CHECKS=$(echo "$CHECKS" | jq '[.[] | select(.name | test("open_pr|auto_pr"; "i") | not)]')
+
+            echo "Filtered checks: $FILTERED_CHECKS"
+
+            if [ "$(echo "$FILTERED_CHECKS" | jq 'length')" -eq 0 ]; then
+              echo "No external checks found, waiting... (iteration $i/90)"
+              sleep 10
+              continue
+            fi
+
+            # Check for failures
+            FAILED=$(echo "$FILTERED_CHECKS" | jq '[.[] | select(.state == "FAILURE")] | length')
+            if [ "$FAILED" -gt 0 ]; then
+              echo "CI checks failed!"
+              echo "$FILTERED_CHECKS" | jq -r '.[] | select(.state == "FAILURE") | "  ❌ \(.name): \(.state)"'
+              echo "status=failed" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            # Check if all completed (SUCCESS state)
+            PENDING=$(echo "$FILTERED_CHECKS" | jq '[.[] | select(.state == "PENDING" or .state == "IN_PROGRESS" or .state == "QUEUED")] | length')
+            if [ "$PENDING" -eq 0 ]; then
+              echo "All CI checks passed!"
+              echo "$FILTERED_CHECKS" | jq -r '.[] | "  ✅ \(.name): \(.state)"'
+              echo "status=passed" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            echo "Iteration $i/90: $PENDING checks still pending..."
+            sleep 10
+          done
+
+          echo "Timeout waiting for CI checks"
+          echo "status=timeout" >> "$GITHUB_OUTPUT"
+
+      - name: Merge PR to main
+        if: steps.wait_ci.outputs.status == 'passed'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.get_pr.outputs.number }}"
+          echo "Merging PR #$PR_NUMBER to main..."
+          gh pr merge "$PR_NUMBER" --squash --delete-branch
+          echo "PR #$PR_NUMBER merged successfully!"
+
+      - name: Notify Discord (success)
+        if: steps.wait_ci.outputs.status == 'passed'
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d "{\"embeds\": [{\"title\": \"✅ Auto-merged: ${{ github.ref_name }}\", \"description\": \"**Repository:** ${{ github.repository }}\n**Author:** ${{ github.actor }}\n**Branch:** \`${{ github.ref_name }}\`\n\nCI passed and PR was automatically merged to main.\", \"color\": 5793266}]}" \
+            "$DISCORD_WEBHOOK"
+
+      - name: Notify Discord (CI failed)
+        if: steps.wait_ci.outputs.status == 'failed'
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d "{\"embeds\": [{\"title\": \"❌ CI Failed: ${{ github.ref_name }}\", \"description\": \"**Repository:** ${{ github.repository }}\n**Author:** ${{ github.actor }}\n**Branch:** \`${{ github.ref_name }}\`\n\nCI checks failed. Please fix the issues and push again.\", \"color\": 15158332}]}" \
+            "$DISCORD_WEBHOOK"
+
+      - name: Notify Discord (timeout)
+        if: steps.wait_ci.outputs.status == 'timeout'
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d "{\"embeds\": [{\"title\": \"⏱️ CI Timeout: ${{ github.ref_name }}\", \"description\": \"**Repository:** ${{ github.repository }}\n**Author:** ${{ github.actor }}\n**Branch:** \`${{ github.ref_name }}\`\n\nCI checks did not complete within 15 minutes.\", \"color\": 16776960}]}" \
+            "$DISCORD_WEBHOOK"
