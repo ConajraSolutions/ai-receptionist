@@ -13,15 +13,44 @@ jobs:
   open_pr:
     runs-on: ubuntu-latest
     steps:
-      - name: Create PR to main (if not exists)
-        uses: peter-evans/create-pull-request@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          base: main
-          branch: ${{ github.ref_name }}
-          title: "Auto PR: ${{ github.ref_name }}"
-          body: |
-            Automated PR from branch `${{ github.ref_name }}` into `main`.
-            Triggered by: ${{ github.actor }}
-          labels: |
-            auto
+      - uses: actions/checkout@v4
+
+      - name: Ensure 'auto' label exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check if 'auto' label exists, create it if not
+          gh label list --json name --jq '.[].name' | grep -q "^auto$" || \
+          gh label create "auto" --color "0E8A16" --description "Automated PR - will auto-merge when CI passes"
+
+      - name: Check if PR already exists
+        id: check_pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_EXISTS=$(gh pr list --head "${{ github.ref_name }}" --base main --json number --jq 'length')
+          echo "exists=$PR_EXISTS" >> "$GITHUB_OUTPUT"
+          echo "PR exists: $PR_EXISTS"
+
+      - name: Create PR to main
+        if: steps.check_pr.outputs.exists == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base main \
+            --head "${{ github.ref_name }}" \
+            --title "Auto PR: ${{ github.ref_name }}" \
+            --body "Automated PR from branch \`${{ github.ref_name }}\` into \`main\`.
+
+          **Triggered by:** ${{ github.actor }}
+          **Branch:** ${{ github.ref_name }}
+          **Commit:** ${{ github.sha }}
+
+          This PR will auto-merge once CI passes." \
+            --label "auto"
+
+      - name: PR already exists
+        if: steps.check_pr.outputs.exists != '0'
+        run: |
+          echo "PR from ${{ github.ref_name }} to main already exists. Skipping creation."
