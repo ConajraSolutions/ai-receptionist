@@ -19,6 +19,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
@@ -36,16 +38,22 @@ jobs:
         if: github.event_name == 'push' && matrix.node-version == '20.x'
         id: info
         run: |
-          echo "short_sha=$(git rev-parse --short ${{ github.sha }})" >> $GITHUB_OUTPUT
-          echo "subject=$(git log -1 --pretty=%s)" >> $GITHUB_OUTPUT
+          echo "short_sha=$(git rev-parse --short '${{ github.sha }}')" >> "$GITHUB_OUTPUT"
+          echo "subject=$(git log -1 --pretty=%s)" >> "$GITHUB_OUTPUT"
 
-          echo "body<<EOF" >> $GITHUB_OUTPUT
-          git log -1 --pretty=%B >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          DELIM="__GHA_DELIM_$(date +%s)__"
 
-          echo "files<<EOF" >> $GITHUB_OUTPUT
-          git diff --name-status ${{ github.event.before }} ${{ github.sha }} >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          {
+            echo "body<<$DELIM"
+            git log -1 --pretty=%B
+            echo "$DELIM"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "files<<$DELIM"
+            git diff --name-status '${{ github.event.before }}' '${{ github.sha }}' || git show --name-status --pretty="" '${{ github.sha }}'
+            echo "$DELIM"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Notify Discord
         if: github.event_name == 'push' && matrix.node-version == '20.x'
@@ -59,7 +67,7 @@ jobs:
           BEFORE: ${{ github.event.before }}
         run: |
           node -e "
-          const fs = process.env.FILES_RAW.split('\n');
+          const fs = (process.env.FILES_RAW || '').split('\n').filter(Boolean);
           const max = 40;
           const shown = fs.slice(0, max).join('\n');
           const more = fs.length > max ? `\n...and ${fs.length - max} more` : '';
