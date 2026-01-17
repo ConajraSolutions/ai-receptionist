@@ -52,92 +52,210 @@ jobs:
           echo "has_label=$HAS_AUTO_LABEL" >> "$GITHUB_OUTPUT"
           echo "Has auto label: $HAS_AUTO_LABEL"
 
-      - name: Wait for checks and enable auto-merge
+      - name: Check for merge conflicts
+        id: conflicts
         if: steps.check_label.outputs.has_label == 'true' && steps.get_pr.outputs.number != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER="${{ steps.get_pr.outputs.number }}"
-          
+
+          # Get mergeable state (may need a moment to compute)
+          sleep 2
+          MERGEABLE=$(gh pr view "$PR_NUMBER" --json mergeable --jq '.mergeable')
+
+          echo "Mergeable state: $MERGEABLE"
+
+          if [ "$MERGEABLE" == "CONFLICTING" ]; then
+            echo "has_conflicts=true" >> "$GITHUB_OUTPUT"
+            # Get PR title for notification
+            PR_TITLE=$(gh pr view "$PR_NUMBER" --json title --jq '.title')
+            echo "pr_title=$PR_TITLE" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_conflicts=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Notify Discord (merge conflicts)
+        if: steps.conflicts.outputs.has_conflicts == 'true'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          PR_NUMBER: ${{ steps.get_pr.outputs.number }}
+          PR_TITLE: ${{ steps.conflicts.outputs.pr_title }}
+          REPO: ${{ github.repository }}
+        run: |
+          test -n "$DISCORD_WEBHOOK_URL" || (echo "Missing DISCORD_WEBHOOK_URL secret" && exit 0)
+
+          PR_URL="https://github.com/${REPO}/pull/${PR_NUMBER}"
+          CONFLICT_URL="https://github.com/${REPO}/pull/${PR_NUMBER}/conflicts"
+
+          curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL" <<EOF
+          {
+            "embeds": [
+              {
+                "title": "⚠️ PR #${PR_NUMBER} Has Merge Conflicts",
+                "url": "${PR_URL}",
+                "description": "**Repo:** ${REPO}\n**PR:** #${PR_NUMBER} - ${PR_TITLE}\n\nThis PR has merge conflicts that need to be resolved before it can be merged.\n\n[Resolve conflicts](${CONFLICT_URL})",
+                "color": 16744448
+              }
+            ]
+          }
+          EOF
+
+          # Comment on the PR
+          gh pr comment "$PR_NUMBER" --body "⚠️ **Merge conflicts detected.** Please [resolve conflicts](${CONFLICT_URL}) before this PR can be auto-merged."
+
+      - name: Wait for checks and enable auto-merge
+        id: merge
+        if: steps.check_label.outputs.has_label == 'true' && steps.get_pr.outputs.number != '' && steps.conflicts.outputs.has_conflicts != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.get_pr.outputs.number }}"
+
           echo "Checking current status of PR #$PR_NUMBER..."
-          
+
           # Get PR status with details
           PR_STATUS=$(gh pr view "$PR_NUMBER" --json statusCheckRollup --jq '.statusCheckRollup')
-          
+
           # Show all checks
           echo "=== All Checks ==="
           echo "$PR_STATUS" | jq -r '.[] | "\(.context // .name): \(.status // .state) - \(.conclusion // "N/A")"'
           echo "=================="
-          
+
           # Wait up to 10 minutes for checks to complete
           TIMEOUT=600
           ELAPSED=0
           INTERVAL=10
-          
+
           while [ $ELAPSED -lt $TIMEOUT ]; do
             PR_STATUS=$(gh pr view "$PR_NUMBER" --json statusCheckRollup --jq '.statusCheckRollup')
-            
+
             # Filter out auto_merge and open_pr from the checks we're waiting for
             PENDING=$(echo "$PR_STATUS" | jq -r '.[] | select((.context // .name) != "auto_merge" and (.context // .name) != "open_pr") | select(.status == "PENDING" or .status == "IN_PROGRESS" or .state == "PENDING")' | jq -s 'length')
-            
+
             if [ "$PENDING" -eq 0 ]; then
               echo "All relevant checks completed!"
               break
             fi
-            
+
             # Show what we're waiting for
             echo "Still waiting... ($PENDING checks pending/in-progress)"
             echo "$PR_STATUS" | jq -r '.[] | select((.context // .name) != "auto_merge" and (.context // .name) != "open_pr") | select(.status == "PENDING" or .status == "IN_PROGRESS" or .state == "PENDING") | "  - \(.context // .name): \(.status // .state)"'
-            
+
             sleep $INTERVAL
             ELAPSED=$((ELAPSED + INTERVAL))
           done
-          
+
           if [ $ELAPSED -ge $TIMEOUT ]; then
             echo "Timeout waiting for checks. Not enabling auto-merge."
+            echo "result=timeout" >> "$GITHUB_OUTPUT"
+            # Capture pending checks for notification
+            PENDING_CHECKS=$(echo "$PR_STATUS" | jq -r '.[] | select((.context // .name) != "auto_merge" and (.context // .name) != "open_pr") | select(.status == "PENDING" or .status == "IN_PROGRESS" or .state == "PENDING") | .context // .name' | tr '\n' ', ' | sed 's/,$//')
+            echo "pending_checks=$PENDING_CHECKS" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          
+
           # Check if all required checks passed (excluding auto_merge and open_pr)
           FAILED=$(echo "$PR_STATUS" | jq -r '.[] | select((.context // .name) != "auto_merge" and (.context // .name) != "open_pr") | select(.conclusion == "FAILURE" or .conclusion == "CANCELLED")' | jq -s 'length')
-          
+
           if [ "$FAILED" -gt 0 ]; then
             echo "Some checks failed. Not enabling auto-merge."
             echo "$PR_STATUS" | jq -r '.[] | select(.conclusion == "FAILURE" or .conclusion == "CANCELLED") | "  ❌ \(.context // .name): \(.conclusion)"'
+            echo "result=failed" >> "$GITHUB_OUTPUT"
+            # Capture failed checks for notification
+            FAILED_CHECKS=$(echo "$PR_STATUS" | jq -r '.[] | select((.context // .name) != "auto_merge" and (.context // .name) != "open_pr") | select(.conclusion == "FAILURE" or .conclusion == "CANCELLED") | .context // .name' | tr '\n' ', ' | sed 's/,$//')
+            echo "failed_checks=$FAILED_CHECKS" >> "$GITHUB_OUTPUT"
             gh pr comment "$PR_NUMBER" --body "❌ CI checks failed. Auto-merge will not be enabled."
             exit 0
           fi
-          
+
           # Enable auto-merge
           echo "Enabling auto-merge for PR #$PR_NUMBER"
           gh pr merge "$PR_NUMBER" --auto --squash --delete-branch
-          
+          echo "result=success" >> "$GITHUB_OUTPUT"
+
           # Add a comment
           gh pr comment "$PR_NUMBER" --body "✅ CI passed! Auto-merge enabled. This PR will merge automatically once all requirements are met."
 
-      - name: Notify Discord
-        if: steps.check_label.outputs.has_label == 'true' && steps.get_pr.outputs.number != ''
+      - name: Notify Discord (timeout)
+        if: steps.merge.outputs.result == 'timeout'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          PR_NUMBER: ${{ steps.get_pr.outputs.number }}
+          PENDING_CHECKS: ${{ steps.merge.outputs.pending_checks }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          test -n "$DISCORD_WEBHOOK_URL" || (echo "Missing DISCORD_WEBHOOK_URL secret" && exit 0)
+
+          PR_URL="https://github.com/${REPO}/pull/${PR_NUMBER}"
+          PR_TITLE=$(gh pr view "$PR_NUMBER" --json title --jq '.title')
+          RUN_URL="https://github.com/${REPO}/actions/runs/${{ github.run_id }}"
+
+          curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL" <<EOF
+          {
+            "embeds": [
+              {
+                "title": "⏰ PR #${PR_NUMBER} Auto-merge Timeout",
+                "url": "${PR_URL}",
+                "description": "**Repo:** ${REPO}\n**PR:** #${PR_NUMBER} - ${PR_TITLE}\n\nTimed out waiting for CI checks to complete.\n\n**Pending checks:** ${PENDING_CHECKS}\n\n[View PR](${PR_URL}) | [View run](${RUN_URL})",
+                "color": 16776960
+              }
+            ]
+          }
+          EOF
+
+      - name: Notify Discord (CI failed)
+        if: steps.merge.outputs.result == 'failed'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          PR_NUMBER: ${{ steps.get_pr.outputs.number }}
+          FAILED_CHECKS: ${{ steps.merge.outputs.failed_checks }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          test -n "$DISCORD_WEBHOOK_URL" || (echo "Missing DISCORD_WEBHOOK_URL secret" && exit 0)
+
+          PR_URL="https://github.com/${REPO}/pull/${PR_NUMBER}"
+          PR_TITLE=$(gh pr view "$PR_NUMBER" --json title --jq '.title')
+          RUN_URL="https://github.com/${REPO}/actions/runs/${{ github.run_id }}"
+
+          curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL" <<EOF
+          {
+            "embeds": [
+              {
+                "title": "❌ PR #${PR_NUMBER} CI Checks Failed",
+                "url": "${PR_URL}",
+                "description": "**Repo:** ${REPO}\n**PR:** #${PR_NUMBER} - ${PR_TITLE}\n\nCI checks failed. Auto-merge will not be enabled.\n\n**Failed checks:** ${FAILED_CHECKS}\n\n[View PR](${PR_URL}) | [View run](${RUN_URL})",
+                "color": 15158332
+              }
+            ]
+          }
+          EOF
+
+      - name: Notify Discord (success)
+        if: steps.merge.outputs.result == 'success'
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           PR_NUMBER: ${{ steps.get_pr.outputs.number }}
           REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
-            PR_URL="https://github.com/${REPO}/pull/${PR_NUMBER}"
-            PR_TITLE=$(gh pr view "$PR_NUMBER" --json title --jq '.title')
-            PR_AUTHOR=$(gh pr view "$PR_NUMBER" --json author --jq '.author.login')
-            
-            curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL" <<EOF
+          test -n "$DISCORD_WEBHOOK_URL" || (echo "Missing DISCORD_WEBHOOK_URL secret" && exit 0)
+
+          PR_URL="https://github.com/${REPO}/pull/${PR_NUMBER}"
+          PR_TITLE=$(gh pr view "$PR_NUMBER" --json title --jq '.title')
+          PR_AUTHOR=$(gh pr view "$PR_NUMBER" --json author --jq '.author.login')
+
+          curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL" <<EOF
           {
             "embeds": [
               {
                 "title": "🔀 Auto-merge enabled: PR #${PR_NUMBER}",
                 "url": "${PR_URL}",
-                "description": "**Repo:** ${REPO}\n**Author:** ${PR_AUTHOR}\n**PR:** #${PR_NUMBER}\n\nCI passed! PR will merge automatically.",
+                "description": "**Repo:** ${REPO}\n**Author:** ${PR_AUTHOR}\n**PR:** #${PR_NUMBER} - ${PR_TITLE}\n\nCI passed! PR will merge automatically.",
                 "color": 5793266
               }
             ]
           }
           EOF
-          fi
