@@ -75,11 +75,20 @@ else
 fi
 
 # --- 6) Ensure 'auto' label exists and is applied ---
-if ! gh label list --repo "$REPO" --json name --jq '.[].name' | grep -q '^auto$'; then
-  gh label create "auto" --repo "$REPO" --color "0E8A16" --description "Automated PR - will auto-merge when CI passes" >/dev/null
+
+if ! gh api repos/$REPO/labels --jq '.[].name' | grep -q '^auto$'; then
+  echo "Creating 'auto' label..."
+  gh api repos/$REPO/labels \
+    -X POST \
+    -f name=auto \
+    -f color=0E8A16 \
+    -f description="Automated PR - will auto-merge when CI passes"
+else
+  echo "'auto' label already exists."
 fi
 
-gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "auto" >/dev/null || true
+gh pr edit "$PR_NUMBER" --add-label auto
+
 
 # --- 7) Enable auto-merge (won't delete branch) ---
 # This will succeed only if repo settings allow auto-merge for you.
