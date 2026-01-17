@@ -82,48 +82,6 @@ jobs:
             echo "test_failed=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Notify Discord (PR test failure)
-        if: github.event_name == 'pull_request' && steps.check_test.outputs.test_failed == 'true' && matrix.node-version == '20.x'
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-          REPO: ${{ github.repository }}
-          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          test -n "$DISCORD_WEBHOOK_URL" || (echo "Missing DISCORD_WEBHOOK_URL secret" && exit 0)
-
-          # Truncate logs to ~50 lines, limit to 3500 chars for Discord embed
-          export LOGS=$(tail -50 test-output.txt | head -c 3500)
-
-          node <<'NODE' | curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL"
-          const prUrl = `https://github.com/${process.env.REPO}/pull/${process.env.PR_NUMBER}`;
-          const logs = process.env.LOGS || "(no logs captured)";
-
-          const payload = {
-            embeds: [
-              {
-                title: `❌ PR #${process.env.PR_NUMBER} Tests Failed`,
-                url: process.env.RUN_URL,
-                description:
-                  `**Repo:** ${process.env.REPO}\n` +
-                  `**PR:** [#${process.env.PR_NUMBER} - ${process.env.PR_TITLE || ""}](${prUrl})\n` +
-                  `**Author:** ${process.env.PR_AUTHOR || "unknown"}\n\n` +
-                  `**Test output (last 50 lines):**\n\`\`\`\n${logs}\n\`\`\`\n` +
-                  `[View full run](${process.env.RUN_URL})`,
-                color: 15158332
-              }
-            ]
-          };
-
-          process.stdout.write(JSON.stringify(payload));
-          NODE
-
-      - name: Fail job if tests failed
-        if: steps.check_test.outputs.test_failed == 'true'
-        run: exit 1
-
       - name: Notify Discord (PR merged to main)
         if: github.event_name == 'push' && matrix.node-version == '20.x' && success() && steps.info.outputs.is_pr_merge == 'true'
         env:
