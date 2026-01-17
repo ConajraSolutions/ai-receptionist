@@ -92,11 +92,11 @@ jobs:
       - name: Notify Discord (merge conflict)
         if: steps.check_behind.outputs.behind != '0' && steps.merge.outputs.success == 'false'
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           curl -H "Content-Type: application/json" \
             -d "{\"content\": \"⚠️ **Merge Conflict** in branch \`${{ github.ref_name }}\`\n\nCould not automatically merge \`main\` into the feature branch.\n\n**Repository:** ${{ github.repository }}\n**Actor:** ${{ github.actor }}\n**Branch:** ${{ github.ref_name }}\n\nPlease resolve the conflicts manually.\"}" \
-            "$DISCORD_WEBHOOK"
+            "$DISCORD_WEBHOOK_URL"
 
       - name: Get PR number
         id: get_pr
@@ -184,26 +184,26 @@ jobs:
       - name: Notify Discord (success)
         if: steps.wait_ci.outputs.status == 'passed'
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           curl -H "Content-Type: application/json" \
             -d "{\"embeds\": [{\"title\": \"✅ Auto-merged: ${{ github.ref_name }}\", \"description\": \"**Repository:** ${{ github.repository }}\n**Author:** ${{ github.actor }}\n**Branch:** \`${{ github.ref_name }}\`\n\nCI passed and PR was automatically merged to main.\", \"color\": 5793266}]}" \
-            "$DISCORD_WEBHOOK"
+            "$DISCORD_WEBHOOK_URL"
 
       - name: Notify Discord (CI failed)
         if: steps.wait_ci.outputs.status == 'failed'
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           curl -H "Content-Type: application/json" \
             -d "{\"embeds\": [{\"title\": \"❌ CI Failed: ${{ github.ref_name }}\", \"description\": \"**Repository:** ${{ github.repository }}\n**Author:** ${{ github.actor }}\n**Branch:** \`${{ github.ref_name }}\`\n\nCI checks failed. Please fix the issues and push again.\", \"color\": 15158332}]}" \
-            "$DISCORD_WEBHOOK"
+            "$DISCORD_WEBHOOK_URL"
 
       - name: Notify Discord (timeout)
         if: steps.wait_ci.outputs.status == 'timeout'
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           curl -H "Content-Type: application/json" \
             -d "{\"embeds\": [{\"title\": \"⏱️ CI Timeout: ${{ github.ref_name }}\", \"description\": \"**Repository:** ${{ github.repository }}\n**Author:** ${{ github.actor }}\n**Branch:** \`${{ github.ref_name }}\`\n\nCI checks did not complete within 15 minutes.\", \"color\": 16776960}]}" \
-            "$DISCORD_WEBHOOK"
+            "$DISCORD_WEBHOOK_URL"
