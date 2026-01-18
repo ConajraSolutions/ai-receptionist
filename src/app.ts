@@ -2,7 +2,7 @@
 // Author: Marwan
 
 // Main application entry point. Initializes the mediator (which owns storage)
-// and starts the server. Storage must connect before accepting requests.
+// and starts the server. Storage must connect before accepting requests
 
 import express from "express"; //
 import "dotenv/config";
