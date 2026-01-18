@@ -129,3 +129,53 @@ jobs:
             ]
           }
           EOF
+
+      - name: Discord (main branch CI success)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.node-version == '20.x' && success()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          test -n "$DISCORD_WEBHOOK_URL" || exit 0
+          COMMIT_URL="https://github.com/${REPO}/commit/${SHA}"
+          SHORT_SHA="${SHA:0:7}"
+
+          curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL" <<EOF
+          {
+            "embeds": [
+              {
+                "title": "🚀 Merged to main",
+                "url": "${COMMIT_URL}",
+                "description": "**Repo:** ${REPO}\n**Commit:** [\`${SHORT_SHA}\`](${COMMIT_URL})\n\nPost-merge CI passed.\n[View run](${RUN_URL})",
+                "color": 5793266
+              }
+            ]
+          }
+          EOF
+
+      - name: Discord (main branch CI failure)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.node-version == '20.x' && failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          test -n "$DISCORD_WEBHOOK_URL" || exit 0
+          COMMIT_URL="https://github.com/${REPO}/commit/${SHA}"
+          SHORT_SHA="${SHA:0:7}"
+
+          curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL" <<EOF
+          {
+            "embeds": [
+              {
+                "title": "❌ Main branch CI failed",
+                "url": "${RUN_URL}",
+                "description": "**Repo:** ${REPO}\n**Commit:** [\`${SHORT_SHA}\`](${COMMIT_URL})\n\nPost-merge validation failed!\n[View run](${RUN_URL})",
+                "color": 15158332
+              }
+            ]
+          }
+          EOF
