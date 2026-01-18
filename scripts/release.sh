@@ -40,14 +40,14 @@ echo "Waiting for CI run for commit ${HEAD_SHA:0:7}..."
 # Poll until a workflow run appears for this commit
 RUN_ID=""
 for i in {1..30}; do
-  RUN_ID="$(gh run list --branch "$BRANCH" --json databaseId,headSha --jq ".[] | select(.headSha==\"$HEAD_SHA\") | .databaseId" | head -1)"
+  RUN_ID="$(gh run list --json databaseId,headSha --jq ".[] | select(.headSha==\"$HEAD_SHA\") | .databaseId" | head -1)"
   [[ -n "$RUN_ID" ]] && break
   sleep 2
 done
 [[ -n "$RUN_ID" ]] || die "No CI run found after 60s"
 
 # Watch the run until completion
-gh run watch "$RUN_ID" || die "CI failed"
+gh run watch "$RUN_ID" --exit-status || die "CI failed"
 
 echo "=== Merging ==="
 MERGEABLE="$(gh pr view "$PR_NUM" --json mergeable --jq '.mergeable')"
