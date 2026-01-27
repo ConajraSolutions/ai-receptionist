@@ -65,3 +65,18 @@ call_mediator.connect()
         console.error("failed to connect storage:", error);
         process.exit(1);
     });
+
+// serve static files from /public
+app.use(express.static("public"));
+
+app.get("/", (_req, res) => {
+  const htmlPath = path.join(process.cwd(), "public", "index.html");
+  let html = fs.readFileSync(htmlPath, "utf-8");
+
+  html = html
+    .replace("__INJECT_PUBLIC_KEY__", check_env("VAPI_PUBLIC_KEY"))
+    .replace("__INJECT_ASSISTANT_ID__", check_env("VAPI_ASSISTANT_ID"));
+
+  res.setHeader("content-type", "text/html");
+  res.send(html);
+});

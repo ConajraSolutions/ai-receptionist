@@ -14,9 +14,11 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@vapi-ai/web": "^2.5.2",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
-    "redis": "^5.10.0"
+    "redis": "^5.10.0",
+    "vapi": "^0.1.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
