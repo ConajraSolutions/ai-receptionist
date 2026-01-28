@@ -6,9 +6,9 @@
 
 import express from "express"; //
 import "dotenv/config";
-
 import { mediator } from "./modules/mediator";
- 
+import path from "path";
+import fs from "fs";
 // server setup code
 const app = express();
 app.use(express.json());
