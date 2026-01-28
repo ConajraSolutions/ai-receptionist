@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>AI Receptionist</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { font-family: system-ui, Arial; padding: 24px; }
+      button { padding: 10px 14px; margin-right: 8px; }
+      pre { background:#111; color:#ddd; padding:12px; border-radius:8px; }
+      .muted { opacity: 0.7; }
+    </style>
+  </head>
+  <body>
+    <h2>AI Receptionist (Local Web Call)</h2>
+    <p class="muted">This works without any public URL. Tool calls won’t reach localhost until you deploy.</p>
+
+    <button id="start">Start</button>
+    <button id="stop" disabled>Stop</button>
+    <span id="status" class="muted">idle</span>
+
+    <h3>Transcript</h3>
+    <pre id="log"></pre>
+
+    <script>
+      window.__VAPI_PUBLIC_KEY__ = "__INJECT_PUBLIC_KEY__";
+      window.__VAPI_ASSISTANT_ID__ = "__INJECT_ASSISTANT_ID__";
+    </script>
+
+    <script type="module" src="/vapi-client.mjs"></script>
+  </body>
+</html>
