@@ -1,0 +1,55 @@
+{
+  "tenant_id": "test_tenant",
+  "name": "Conajra Healthcare Centre",
+  "vapi_cfg": {
+    "name": "Conajra Healthcare Receptionist",
+    "firstMessage": "Welcome to Conajra Healthcare Centre! How can I help you today?",
+    "model": {
+      "provider": "openai",
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are an AI receptionist for Conajra Healthcare Centre. Verify the customer, then offer booking, rescheduling, or cancellation. Use scheduling tools when needed. Keep replies under 30 words."
+        }
+      ],
+      "temperature": 0.7
+    },
+    "voice": {
+      "provider": "11labs",
+      "voiceId": "sarah",
+      "speed": 1.0
+    },
+    "server": {
+      "url": "http://localhost:3000/vapi/webhook",
+      "timeoutSeconds": 20
+    },
+    "clientMessages": [
+      "conversation-update",
+      "function-call",
+      "hang",
+      "metadata",
+      "model-output",
+      "speech-update",
+      "status-update",
+      "transcript",
+      "tool-calls",
+      "user-interrupted",
+      "voice-input"
+    ],
+    "serverMessages": [
+      "conversation-update",
+      "end-of-call-report",
+      "function-call",
+      "hang",
+      "speech-update",
+      "status-update",
+      "tool-calls",
+      "transfer-destination-request",
+      "user-interrupted"
+    ],
+    "maxDurationSeconds": 600,
+    "backgroundSound": "office"
+  },
+  "calendar_credentials": {}
+}

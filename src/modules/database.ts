@@ -12,15 +12,22 @@ export class db {
 
     constructor(base_path: string) { this.base_path = base_path; }
 
-    async read<T>(tenant_id: string): Promise<T | null> 
+    async read<T>(tenant_id: string): Promise<T | null>
     {
         const file_path = path.join(this.base_path, `${tenant_id}.json`);
-        try 
+        console.log(`[database] Reading tenant config from: ${file_path}`);
+        try
         {
             const data = await fs.readFile(file_path, "utf-8");
-            return JSON.parse(data) as T;
-        } 
-        catch { return null; }
+            const parsed = JSON.parse(data);
+            console.log(`[database] Successfully loaded config for tenant: ${tenant_id}`);
+            return parsed as T;
+        }
+        catch (error: any)
+        {
+            console.error(`[database] Failed to read ${file_path}:`, error.message);
+            return null;
+        }
     }
 
     async write<T>(tenant_id: string, data: T): Promise<void> 

@@ -53,4 +53,11 @@ export class mediator {
         }
     }
 
+    // Agent configuration retrieval
+    // Provides access to tenant configuration for agent initialization
+    async get_tenant_config(tenant_id: string)
+    {
+        return await this.m_storage.get_tenant_config(tenant_id);
+    }
+
 }
