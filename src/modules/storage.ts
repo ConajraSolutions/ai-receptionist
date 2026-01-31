@@ -57,15 +57,39 @@ export class storage {
     // tenant storage
     async get_tenant_config(tenant_id: string): Promise<tenant_config | null>
     {
-        // step 1: check cache
-        const cached = await this.cache.config.get(tenant_id);
-        if (cached) return cached;
+        console.log(`[storage] Getting tenant config for: ${tenant_id}`);
 
-        // step 2: cache miss, load from db
+        // In development, skip cache to always get fresh config
+        const is_dev = process.env.NODE_ENV !== 'production';
+
+        // step 1: check cache (skip in development)
+        if (!is_dev)
+        {
+            const cached = await this.cache.config.get(tenant_id);
+            if (cached)
+            {
+                console.log(`[storage] Config found in cache for tenant: ${tenant_id}`);
+                return cached;
+            }
+        }
+        else
+        {
+            console.log(`[storage] Development mode: skipping cache, loading fresh config`);
+        }
+
+        console.log(`[storage] Loading from database...`);
+
+        // step 2: load from db
         const config = await this.db.read<tenant_config>(tenant_id);
-        if (!config) return null;
+        if (!config)
+        {
+            console.error(`[storage] No config found in database for tenant: ${tenant_id}`);
+            return null;
+        }
 
-        // step 3: cache the result
+        console.log(`[storage] Config loaded from database`);
+
+        // step 3: cache the result (even in dev, for rate limiting and other cache users)
         await this.cache.config.set(config);
 
         return config;

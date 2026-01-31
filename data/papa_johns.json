@@ -1,0 +1,119 @@
+{
+  "tenant_id": "papa_johns",
+  "name": "Papa John's Pizza",
+  "vapi_cfg": {
+    "name": "Papa John's Receptionist",
+    "firstMessage": "Thank you for calling Papa John's! How can I help you today?",
+    "model": {
+      "provider": "openai",
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are an AI receptionist for Papa John's Pizza. Help customers book delivery/pickup times and check time slot availability. Use the book_appointment function when a customer wants to schedule a time, and check_availability to see what times are open. Be friendly and keep replies under 30 words."
+        }
+      ],
+      "temperature": 0.7,
+      "tools": [
+        {
+          "type": "function",
+          "async": false,
+          "messages": [
+            {
+              "type": "request-start",
+              "content": "Let me check on that for you..."
+            }
+          ],
+          "function": {
+            "name": "book_appointment",
+            "description": "Books a delivery or pickup time slot for the customer. Call this when the customer wants to schedule a specific time.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "customer_name": {
+                  "type": "string",
+                  "description": "The customer's name"
+                },
+                "phone_number": {
+                  "type": "string",
+                  "description": "The customer's phone number"
+                },
+                "time_slot": {
+                  "type": "string",
+                  "description": "Preferred delivery/pickup time in ISO format (e.g., 2026-01-31T14:00:00Z)"
+                },
+                "service_type": {
+                  "type": "string",
+                  "enum": ["delivery", "pickup"],
+                  "description": "Whether this is delivery or pickup"
+                }
+              },
+              "required": ["customer_name", "phone_number", "time_slot", "service_type"]
+            }
+          },
+          "server": {
+            "url": "http://localhost:3000/vapi/webhook"
+          }
+        },
+        {
+          "type": "function",
+          "async": false,
+          "messages": [
+            {
+              "type": "request-start",
+              "content": "Let me check our available times..."
+            }
+          ],
+          "function": {
+            "name": "check_availability",
+            "description": "Checks what time slots are available for delivery or pickup on a specific date.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "description": "The date to check availability for in YYYY-MM-DD format"
+                },
+                "service_type": {
+                  "type": "string",
+                  "enum": ["delivery", "pickup"],
+                  "description": "Whether to check delivery or pickup availability"
+                }
+              },
+              "required": ["date", "service_type"]
+            }
+          },
+          "server": {
+            "url": "http://localhost:3000/vapi/webhook"
+          }
+        }
+      ]
+    },
+    "voice": {
+      "provider": "azure",
+      "voiceId": "andrew",
+      "speed": 1.0
+    },
+    "clientMessages": [
+      "conversation-update",
+      "function-call",
+      "hang",
+      "metadata",
+      "speech-update",
+      "status-update",
+      "transcript",
+      "tool-calls"
+    ],
+    "serverMessages": [
+      "end-of-call-report",
+      "function-call",
+      "hang",
+      "speech-update",
+      "status-update",
+      "tool-calls"
+    ],
+    "maxDurationSeconds": 600,
+    "backgroundSound": "office"
+  },
+  "calendar_credentials": {}
+}
