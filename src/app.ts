@@ -9,6 +9,7 @@ import express from "express";
 import path from "path";
 import { mediator } from "./modules/mediator";
 import { vapi_agent } from "./modules/vapi_agent";
+import { startup_checks } from "./utils/startup_checks";
 
 function check_env(name: string): string
 {
@@ -26,15 +27,30 @@ async function shutdown(mediator: mediator): Promise<void>
 
 async function main()
 {
+    // startup health checks
+    const health_checker = new startup_checks();
+    const health_ok = await health_checker.run_all();
+
+    if (!health_ok)
+    {
+        console.error("Startup health checks failed. Exiting...");
+        process.exit(1);
+    }
+
+    // let's rip
     const app = express();
     app.use(express.json());
-    
+
     const tenant_id = check_env("TENANT_ID");
     const vapi_api_key = check_env("VAPI_API_KEY");
     const port = check_env("PORT");
-    
+
+    // Convert relative DB_PATH to absolute based on project root
+    const raw_db_path = check_env("DB_PATH");
+    const db_path = path.isAbsolute(raw_db_path) ? raw_db_path : path.join(__dirname, "..", raw_db_path);
+
     const call_mediator = new mediator({
-        db_path: check_env("DB_PATH"),
+        db_path: db_path,
         redis_url: check_env("REDIS_URL"),
         rate_limit_max: parseInt(check_env("RATE_LIMIT_MAX")),
         rate_limit_window: parseInt(check_env("RATE_LIMIT_WINDOW")),
