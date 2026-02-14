@@ -1,0 +1,38 @@
+***
+
+title: Provider Keys
+subtitle: Bring your own API keys to Vapi.
+slug: customization/provider-keys
+---------------------------------
+
+Have a custom model or voice with one of the providers? Or an enterprise account with volume pricing?
+
+No problem! You can bring your own API keys to Vapi. You can add them in the [Dashboard](https://dashboard.vapi.ai) under the **Integrations** tab. Once your API key is validated, you won't be charged when using that provider through Vapi. Instead, you'll be charged directly by the provider.
+
+## Transcription Providers
+
+Currently, the only available transcription provider is `deepgram`. To use a custom model, you can specify the deepgram model ID in the `transcriber.model` parameter of the [Assistant](/api-reference/assistants/create-assistant).
+
+## Model Providers
+
+We are currently have support for any OpenAI-compatible endpoint. This includes services like [OpenRouter](https://openrouter.ai/), [AnyScale](https://www.anyscale.com/), [Together AI](https://www.together.ai/), or your own server.
+
+To use one of these providers, you can specify the `provider` and `model` in the `model` parameter of the [Assistant](/api-reference/assistants/create-assistant).
+
+You can find more details in the [Custom LLMs](/customization/custom-llm/fine-tuned-openai-models) section of the documentation.
+
+## Voice Providers
+
+All voice providers are supported. Once you've validated your API through the [Dashboard](https://dashboard.vapi.ai), any voice ID from your provider can be used in the `voice.voiceId` field of the [Assistant](/api-reference/assistants/create-assistant).
+
+## Cloud Providers
+
+Vapi stores recordings of conversations with assistants in the cloud.  By default, Vapi stores these recordings in its
+own bucket in Cloudflare R2.  You can configure Vapi to store recordings in your own bucket in AWS S3, GCP, or
+Cloudflare R2.
+
+You can find more details on how to configure your Cloud Provider keys here:
+
+* [AWS S3](/providers/cloud/s3)
+* [GCP Cloud Storage](/providers/cloud/gcp)
+* [Cloudflare R2](/providers/cloud/cloudflare)

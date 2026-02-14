@@ -3,7 +3,10 @@
 # Unified release script - runs local tests, creates PR, waits for CI, merges
 set -euo pipefail
 
-# Usage: ./scripts/release.sh "commit message"
+# Usage: ./scripts/dorelease.sh "commit message"
+# sudo apt install gh
+# sudo apt install lsof
+# sudo apt install redis-tools
 
 MSG="${1:-}"
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"

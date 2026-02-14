@@ -6,7 +6,7 @@
 
 import { VapiClient } from "@vapi-ai/server-sdk";
 import { mediator } from "./mediator";
-import { vapi_cfg, vapi_assistant_response } from "../types/vapi_config";
+import { vapi_cfg, vapi_assistant_response } from "../types/vapi_type";
 
 export class vapi_agent
 {

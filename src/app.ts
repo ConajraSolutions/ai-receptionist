@@ -56,7 +56,7 @@ async function main()
         rate_limit_window: parseInt(check_env("RATE_LIMIT_WINDOW")),
         rate_limit_fail_open: check_env("RATE_LIMIT_FAIL_OPEN") === "true",
         config_cache_ttl: parseInt(check_env("CONFIG_CACHE_TTL"))
-    });
+    }, tenant_id);
     const agent = new vapi_agent(call_mediator, tenant_id, vapi_api_key);
 
 
@@ -65,10 +65,6 @@ async function main()
 
     console.log(`Creating Vapi assistant for tenant: ${tenant_id}`);
     await agent.create();
-
-    console.log(`✓ Vapi assistant ready`);
-    console.log(`  Assistant ID: ${agent.get_id()}`);
-    console.log(`  Tenant: ${tenant_id}`);
     
     // Endpoint to get assistant ID and public key for demo/testing purposes
     app.get("/assistant-id", (req, res) =>
@@ -91,14 +87,27 @@ async function main()
 
     app.post("/vapi/webhook", async (req, res) =>
     {
+        console.log("\n========== INCOMING VAPI WEBHOOK ==========");
+        console.log("Function:", req.body?.function_name || req.body?.message?.toolCalls?.[0]?.function?.name);
+        console.log("==========================================\n");
+
         try
         {
             const result = await call_mediator.handle_webhook(req.body);
+
+            console.log("\n========== WEBHOOK RESPONSE ==========");
+            console.log("Response:", JSON.stringify(result, null, 2));
+            console.log("======================================\n");
+
             res.json(result);
         }
         catch (e: any)
         {
-            console.error("Webhook error:", e.message);
+            console.error("\n========== WEBHOOK ERROR ==========");
+            console.error("Error:", e.message);
+            console.error("Stack:", e.stack);
+            console.error("===================================\n");
+
             res.status(500).json({ error: e.message });
         }
     });
