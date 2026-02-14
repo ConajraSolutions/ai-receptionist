@@ -1,22 +1,22 @@
 {
-  "tenant_id": "papa_johns",
-  "name": "Papa John's Pizza",
+  "tenant_id": "barber_shop",
+  "name": "Men Zone Barber Shop",
   "vapi_cfg": {
-    "name": "Papa John's Receptionist",
-    "firstMessage": "Thank you for calling Papa John's! How can I help you today?",
+    "name": "Men Zone Receptionist",
+    "firstMessage": "Thanks for calling Men Zone Barber Shop! How can I help you today?",
     "transcriber":
     {
       "provider": "deepgram",
       "model": "flux-general-en"
     },
-    "model": 
+    "model":
     {
       "provider": "openai",
       "model": "gpt-4o",
       "messages": [
         {
           "role": "system",
-          "content": "You are an AI receptionist for Papa John's Pizza. Help customers book delivery/pickup times and check time slot availability. Use the book_appointment function when a customer wants to schedule a time, and check_availability to see what times are open. Be friendly and keep replies under 30 words."
+          "content": "You are an AI receptionist for Men Zone Barber Shop. Help customers book appointments and check available time slots. We offer haircuts, beard trims, and hot towel shaves. Use the book_appointment function when a customer wants to schedule, and check_availability to see what times are open. Be professional and friendly. Keep replies under 30 words."
         }
       ],
       "temperature": 0.7,
@@ -27,12 +27,12 @@
           "messages": [
             {
               "type": "request-start",
-              "content": "Let me check on that for you..."
+              "content": "Let me book that for you..."
             }
           ],
           "function": {
             "name": "book_appointment",
-            "description": "Books a delivery or pickup time slot for the customer. Call this when the customer wants to schedule a specific time.",
+            "description": "Books an appointment for the customer. Call this when the customer wants to schedule a specific time.",
             "parameters": {
               "type": "object",
               "properties": {
@@ -46,12 +46,12 @@
                 },
                 "time_slot": {
                   "type": "string",
-                  "description": "Preferred delivery/pickup time in ISO format (e.g., 2026-01-31T14:00:00Z)"
+                  "description": "Preferred appointment time in ISO format (e.g., 2026-02-14T14:00:00Z)"
                 },
                 "service_type": {
                   "type": "string",
-                  "enum": ["delivery", "pickup"],
-                  "description": "Whether this is delivery or pickup"
+                  "enum": ["haircut", "beard-trim", "shave"],
+                  "description": "Type of service: haircut, beard-trim, or shave"
                 }
               },
               "required": ["customer_name", "phone_number", "time_slot", "service_type"]
@@ -67,12 +67,12 @@
           "messages": [
             {
               "type": "request-start",
-              "content": "Let me check our available times..."
+              "content": "Let me check our schedule..."
             }
           ],
           "function": {
             "name": "check_availability",
-            "description": "Checks what time slots are available for delivery or pickup on a specific date.",
+            "description": "Checks what time slots are available for a specific service on a specific date.",
             "parameters": {
               "type": "object",
               "properties": {
@@ -82,8 +82,8 @@
                 },
                 "service_type": {
                   "type": "string",
-                  "enum": ["delivery", "pickup"],
-                  "description": "Whether to check delivery or pickup availability"
+                  "enum": ["haircut", "beard-trim", "shave"],
+                  "description": "Type of service: haircut, beard-trim, or shave"
                 }
               },
               "required": ["date", "service_type"]
@@ -95,12 +95,12 @@
         }
       ]
     },
-    "voice": 
+    "voice":
     {
       "provider": "11labs",
-      "voiceId": "marissa"
+      "voiceId": "burt"
     },
-    "clientMessages": 
+    "clientMessages":
     [
       "conversation-update",
       "function-call",
@@ -111,7 +111,7 @@
       "transcript",
       "tool-calls"
     ],
-    "serverMessages": 
+    "serverMessages":
     [
       "end-of-call-report",
       "function-call",

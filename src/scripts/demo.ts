@@ -6,6 +6,13 @@
 //
 // Usage: npm run demo
 //
+// Setup for Testing with Vapi (ngrok required):
+// 1. Run ngrok: `ngrok http 3000` (keep terminal open)
+// 2. Copy the ngrok HTTPS URL (e.g., https://abc123.ngrok-free.app)
+// 3. Update tenant config: Set both tool server.url to "{ngrok_url}/vapi/webhook"
+// 4. Run demo: `npm run demo`
+// 5. Test voice calls in browser - Vapi will now reach your local server
+//
 // What it does:
 // 1. Validates .env file and required environment variables
 // 2. Checks if port is available (using Node.js net module, no lsof needed)
@@ -15,7 +22,6 @@
 // 6. Handles cleanup on Ctrl+C
 //
 // Dependencies: chalk (colors), open (browser), all cross-platform
-// Legacy bash version kept at: scripts/dodemo.sh
 
 import { spawn, ChildProcess } from "child_process";
 import * as fs from "fs";

@@ -1,7 +1,7 @@
 // Conajra Solutions © 2026
 // Author: Marwan
 
-import { vapi_cfg } from "./vapi_config";
+import { vapi_cfg } from "./vapi_type";
 
 export interface tenant_config
 {
