@@ -4,7 +4,7 @@
 // this is a structured format for sotring tenant configs usinf the db module
 
 import { db } from "./database";
-import { tenant_config } from "../types/tenant_config_type";
+import { tenant_config } from "../types/tenant_type";
 
 export class tenant_config_store {
 

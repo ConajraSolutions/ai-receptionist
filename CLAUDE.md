@@ -27,6 +27,8 @@ Vapi (Voice AI) → POST /vapi/webhook → Mediator → Services (Scheduler, etc
 
 **Adapter Pattern** (planned): Calendar integrations will use a unified interface with platform-specific adapters (Google, Outlook, Notion).
 
+**Tenant-Agnostic Services**: All services (scheduler, etc.) accept generic parameters (`Record<string, unknown>`) rather than hardcoded types. Each tenant defines their own function parameters in their Vapi configuration JSON schema. This allows the same codebase to serve a pizza shop (delivery|pickup), healthcare facility (in-person|telehealth), salon (haircut|manicure), etc.
+
 ### Project Structure
 ```
 src/

@@ -9,9 +9,9 @@ import { db } from "./database";
 import { redis_client } from "./redis_client";
 import { rate_limiter } from "./rate_limiter";
 import { config_cache } from "./config_cache";
-import { tenant_config } from "../types/tenant_config_type";
+import { tenant_config } from "../types/tenant_type";
 
-export interface storage_options {
+export interface storage_configs {
     db_path: string;
     redis_url: string;
     rate_limit_max: number;
@@ -29,7 +29,7 @@ export class storage {
         rate_limiter: rate_limiter;
     };
 
-    constructor(options: storage_options)
+    constructor(options: storage_configs)
     {
         // persistent storage
         this.db = new db(options.db_path);

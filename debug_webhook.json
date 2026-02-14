@@ -1,0 +1,499 @@
+{
+  "message": {
+    "timestamp": 1771101926540,
+    "type": "tool-calls",
+    "toolCalls": [
+      {
+        "id": "call_R1fAkGXUnrI7f4xJgRGzaExh",
+        "type": "function",
+        "function": {
+          "name": "check_availability",
+          "arguments": {
+            "date": "2026-02-15",
+            "service_type": "haircut"
+          }
+        }
+      }
+    ],
+    "toolCallList": [
+      {
+        "id": "call_R1fAkGXUnrI7f4xJgRGzaExh",
+        "type": "function",
+        "function": {
+          "name": "check_availability",
+          "arguments": {
+            "date": "2026-02-15",
+            "service_type": "haircut"
+          }
+        }
+      }
+    ],
+    "toolWithToolCallList": [
+      {
+        "type": "function",
+        "function": {
+          "name": "check_availability",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "date",
+              "service_type"
+            ],
+            "properties": {
+              "date": {
+                "type": "string",
+                "description": "The date to check availability for in YYYY-MM-DD format"
+              },
+              "service_type": {
+                "enum": [
+                  "haircut",
+                  "beard-trim",
+                  "shave"
+                ],
+                "type": "string",
+                "description": "Type of service: haircut, beard-trim, or shave"
+              }
+            }
+          },
+          "description": "Checks what time slots are available for a specific service on a specific date."
+        },
+        "async": false,
+        "server": {
+          "url": "https://unresentful-myrtice-unawares.ngrok-free.dev/vapi/webhook"
+        },
+        "messages": [
+          {
+            "type": "request-start",
+            "content": "Let me check our schedule...",
+            "contents": [],
+            "conditions": [],
+            "blocking": false
+          }
+        ],
+        "toolCall": {
+          "id": "call_R1fAkGXUnrI7f4xJgRGzaExh",
+          "type": "function",
+          "function": {
+            "name": "check_availability",
+            "arguments": {
+              "date": "2026-02-15",
+              "service_type": "haircut"
+            }
+          }
+        }
+      }
+    ],
+    "artifact": {
+      "messages": [
+        {
+          "role": "system",
+          "message": "You are an AI receptionist for Men Zone Barber Shop. Help customers book appointments and check available time slots. We offer haircuts, beard trims, and hot towel shaves. Use the book_appointment function when a customer wants to schedule, and check_availability to see what times are open. Be professional and friendly. Keep replies under 30 words.",
+          "time": 1771101902764,
+          "secondsFromStart": 0
+        },
+        {
+          "role": "bot",
+          "message": "Thanks for calling Men's Own Barber Shop. How can I help you today?",
+          "time": 1771101904311,
+          "endTime": 1771101907269,
+          "secondsFromStart": 1.442,
+          "duration": 2958,
+          "source": ""
+        },
+        {
+          "role": "user",
+          "message": "Hey. Can I please book a haircut",
+          "time": 1771101909912,
+          "endTime": 1771101913391,
+          "secondsFromStart": 7.043,
+          "duration": 3479,
+          "metadata": {
+            "wordLevelConfidence": [
+              {
+                "word": "Hey.",
+                "start": 1771101909912,
+                "end": 1771101910409,
+                "confidence": 1,
+                "language": "",
+                "punctuated_word": "Hey."
+              },
+              {
+                "word": "Can",
+                "start": 1771101910409,
+                "end": 1771101910906,
+                "confidence": 1,
+                "language": "",
+                "punctuated_word": "Can"
+              },
+              {
+                "word": "I",
+                "start": 1771101910906,
+                "end": 1771101911403,
+                "confidence": 1,
+                "language": "",
+                "punctuated_word": "I"
+              },
+              {
+                "word": "please",
+                "start": 1771101911403,
+                "end": 1771101911900,
+                "confidence": 1,
+                "language": "",
+                "punctuated_word": "please"
+              },
+              {
+                "word": "book",
+                "start": 1771101911900,
+                "end": 1771101912397,
+                "confidence": 0.9995,
+                "language": "",
+                "punctuated_word": "book"
+              },
+              {
+                "word": "a",
+                "start": 1771101912397,
+                "end": 1771101912894,
+                "confidence": 1,
+                "language": "",
+                "punctuated_word": "a"
+              },
+              {
+                "word": "haircut",
+                "start": 1771101912894,
+                "end": 1771101913391,
+                "confidence": 1,
+                "language": "",
+                "punctuated_word": "haircut"
+              }
+            ]
+          }
+        },
+        {
+          "role": "bot",
+          "message": "Sure. What date and time are you considering for your haircut appointment?",
+          "time": 1771101914504,
+          "endTime": 1771101916869,
+          "secondsFromStart": 11.635,
+          "duration": 2365,
+          "source": ""
+        },
+        {
+          "role": "user",
+          "message": "Ashley, can you check the availability on, uh, February fifteenth, please?",
+          "time": 1771101919643,
+          "endTime": 1771101924431,
+          "secondsFromStart": 16.774,
+          "duration": 4788,
+          "metadata": {
+            "wordLevelConfidence": [
+              {
+                "word": "Ashley,",
+                "start": 1771101919643,
+                "end": 1771101920078.2727,
+                "confidence": 1,
+                "language": "",
+                "punctuated_word": "Ashley,"
+              },
+              {
+                "word": "can",
+                "start": 1771101920078.2727,
+                "end": 1771101920513.5454,
+                "confidence": 1,
+                "language": "",
+                "punctuated_word": "can"
+              },
+              {
+                "word": "you",
+                "start": 1771101920513.5454,
+                "end": 1771101920948.818,
+                "confidence": 1,
+                "language": "",
+                "punctuated_word": "you"
+              },
+              {
+                "word": "check",
+                "start": 1771101920948.818,
+                "end": 1771101921384.0908,
+                "confidence": 1,
+                "language": "",
+                "punctuated_word": "check"
+              },
+              {
+                "word": "the",
+                "start": 1771101921384.0908,
+                "end": 1771101921819.3635,
+                "confidence": 1,
+                "language": "",
+                "punctuated_word": "the"
+              },
+              {
+                "word": "availability",
+                "start": 1771101921819.3635,
+                "end": 1771101922254.6365,
+                "confidence": 1,
+                "language": "",
+                "punctuated_word": "availability"
+              },
+              {
+                "word": "on,",
+                "start": 1771101922254.6365,
+                "end": 1771101922689.9092,
+                "confidence": 1,
+                "language": "",
+                "punctuated_word": "on,"
+              },
+              {
+                "word": "uh,",
+                "start": 1771101922689.9092,
+                "end": 1771101923125.182,
+                "confidence": 1,
+                "language": "",
+                "punctuated_word": "uh,"
+              },
+              {
+                "word": "February",
+                "start": 1771101923125.182,
+                "end": 1771101923560.4546,
+                "confidence": 1,
+                "language": "",
+                "punctuated_word": "February"
+              },
+              {
+                "word": "fifteenth,",
+                "start": 1771101923560.4546,
+                "end": 1771101923995.7273,
+                "confidence": 1,
+                "language": "",
+                "punctuated_word": "fifteenth,"
+              },
+              {
+                "word": "please?",
+                "start": 1771101923995.7273,
+                "end": 1771101924431,
+                "confidence": 1,
+                "language": "",
+                "punctuated_word": "please?"
+              }
+            ]
+          }
+        },
+        {
+          "toolCalls": [
+            {
+              "id": "call_R1fAkGXUnrI7f4xJgRGzaExh",
+              "type": "function",
+              "function": {
+                "name": "check_availability",
+                "arguments": "{\"date\": \"2026-02-15\", \"service_type\": \"haircut\"}"
+              }
+            }
+          ],
+          "role": "tool_calls",
+          "message": "",
+          "time": 1771101926534,
+          "secondsFromStart": 23.665
+        }
+      ],
+      "messagesOpenAIFormatted": [
+        {
+          "role": "system",
+          "content": "You are an AI receptionist for Men Zone Barber Shop. Help customers book appointments and check available time slots. We offer haircuts, beard trims, and hot towel shaves. Use the book_appointment function when a customer wants to schedule, and check_availability to see what times are open. Be professional and friendly. Keep replies under 30 words."
+        },
+        {
+          "role": "assistant",
+          "content": "Thanks for calling Men's Own Barber Shop. How can I help you today?"
+        },
+        {
+          "role": "user",
+          "content": "Hey. Can I please book a haircut"
+        },
+        {
+          "role": "assistant",
+          "content": "Sure. What date and time are you considering for your haircut appointment?"
+        },
+        {
+          "role": "user",
+          "content": "Ashley, can you check the availability on, uh, February fifteenth, please?"
+        },
+        {
+          "role": "assistant",
+          "tool_calls": [
+            {
+              "id": "call_R1fAkGXUnrI7f4xJgRGzaExh",
+              "type": "function",
+              "function": {
+                "name": "check_availability",
+                "arguments": "{\"date\": \"2026-02-15\", \"service_type\": \"haircut\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_R1fAkGXUnrI7f4xJgRGzaExh",
+          "content": "Tool Result Still Pending But Proceed Further If Possible."
+        }
+      ]
+    },
+    "call": {
+      "id": "019c5de6-551b-7cc0-b795-429dc8525645",
+      "orgId": "ea3795a0-5954-40ba-a911-c22edb410bd7",
+      "createdAt": "2026-02-14T20:45:02.107Z",
+      "updatedAt": "2026-02-14T20:45:02.107Z",
+      "type": "webCall",
+      "cost": 0,
+      "monitor": {
+        "listenUrl": "wss://phone-call-websocket.aws-us-west-2-backend-production3.vapi.ai/019c5de6-551b-7cc0-b795-429dc8525645/listen",
+        "controlUrl": "https://phone-call-websocket.aws-us-west-2-backend-production3.vapi.ai/019c5de6-551b-7cc0-b795-429dc8525645/control"
+      },
+      "transport": {
+        "conversationType": "voice",
+        "provider": "daily",
+        "videoRecordingEnabled": false,
+        "assistantVideoEnabled": false,
+        "roomDeleteOnUserLeaveEnabled": true,
+        "callUrl": "https://vapi.daily.co/Lkz5iILuK7BD4A3LIvqP"
+      },
+      "webCallUrl": "https://vapi.daily.co/Lkz5iILuK7BD4A3LIvqP",
+      "status": "queued",
+      "assistantId": "c70ad8c3-1f95-4de3-a797-0eeb79b80490"
+    },
+    "assistant": {
+      "id": "c70ad8c3-1f95-4de3-a797-0eeb79b80490",
+      "orgId": "ea3795a0-5954-40ba-a911-c22edb410bd7",
+      "name": "Men Zone Receptionist",
+      "voice": {
+        "voiceId": "burt",
+        "provider": "11labs"
+      },
+      "createdAt": "2026-02-14T20:44:57.281Z",
+      "updatedAt": "2026-02-14T20:44:57.281Z",
+      "model": {
+        "model": "gpt-4o",
+        "tools": [
+          {
+            "type": "function",
+            "async": false,
+            "server": {
+              "url": "https://unresentful-myrtice-unawares.ngrok-free.dev/vapi/webhook"
+            },
+            "function": {
+              "name": "book_appointment",
+              "parameters": {
+                "type": "object",
+                "required": [
+                  "customer_name",
+                  "phone_number",
+                  "time_slot",
+                  "service_type"
+                ],
+                "properties": {
+                  "time_slot": {
+                    "type": "string",
+                    "description": "Preferred appointment time in ISO format (e.g., 2026-02-14T14:00:00Z)"
+                  },
+                  "phone_number": {
+                    "type": "string",
+                    "description": "The customer's phone number"
+                  },
+                  "service_type": {
+                    "enum": [
+                      "haircut",
+                      "beard-trim",
+                      "shave"
+                    ],
+                    "type": "string",
+                    "description": "Type of service: haircut, beard-trim, or shave"
+                  },
+                  "customer_name": {
+                    "type": "string",
+                    "description": "The customer's name"
+                  }
+                }
+              },
+              "description": "Books an appointment for the customer. Call this when the customer wants to schedule a specific time."
+            },
+            "messages": [
+              {
+                "type": "request-start",
+                "content": "Let me book that for you..."
+              }
+            ]
+          },
+          {
+            "type": "function",
+            "async": false,
+            "server": {
+              "url": "https://unresentful-myrtice-unawares.ngrok-free.dev/vapi/webhook"
+            },
+            "function": {
+              "name": "check_availability",
+              "parameters": {
+                "type": "object",
+                "required": [
+                  "date",
+                  "service_type"
+                ],
+                "properties": {
+                  "date": {
+                    "type": "string",
+                    "description": "The date to check availability for in YYYY-MM-DD format"
+                  },
+                  "service_type": {
+                    "enum": [
+                      "haircut",
+                      "beard-trim",
+                      "shave"
+                    ],
+                    "type": "string",
+                    "description": "Type of service: haircut, beard-trim, or shave"
+                  }
+                }
+              },
+              "description": "Checks what time slots are available for a specific service on a specific date."
+            },
+            "messages": [
+              {
+                "type": "request-start",
+                "content": "Let me check our schedule..."
+              }
+            ]
+          }
+        ],
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are an AI receptionist for Men Zone Barber Shop. Help customers book appointments and check available time slots. We offer haircuts, beard trims, and hot towel shaves. Use the book_appointment function when a customer wants to schedule, and check_availability to see what times are open. Be professional and friendly. Keep replies under 30 words."
+          }
+        ],
+        "provider": "openai",
+        "temperature": 0.7
+      },
+      "firstMessage": "Thanks for calling Men Zone Barber Shop! How can I help you today?",
+      "transcriber": {
+        "model": "flux-general-en",
+        "provider": "deepgram"
+      },
+      "clientMessages": [
+        "conversation-update",
+        "function-call",
+        "hang",
+        "metadata",
+        "speech-update",
+        "status-update",
+        "transcript",
+        "tool-calls"
+      ],
+      "serverMessages": [
+        "end-of-call-report",
+        "function-call",
+        "hang",
+        "speech-update",
+        "status-update",
+        "tool-calls"
+      ],
+      "maxDurationSeconds": 600,
+      "backgroundSound": "off"
+    }
+  }
+}
