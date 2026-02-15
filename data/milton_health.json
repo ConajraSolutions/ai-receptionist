@@ -1,0 +1,175 @@
+{
+  "tenant_id": "milton_health",
+  "name": "Milton Health Centre",
+  "vapi_cfg": {
+    "name": "Milton Health Centre Receptionist",
+    "firstMessage": "Thank you for calling Milton Health Centre. My name is Sarah, how may I help you today?",
+    "transcriber": {
+      "provider": "deepgram",
+      "model": "flux-general-en"
+    },
+    "model": {
+      "provider": "openai",
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are an AI receptionist for Milton Health Centre, a family practice clinic in Milton, Ontario. Your role is to help patients book appointments with our four doctors: Dr. Shazia Latif, Dr. Meena Hussain, Dr. Arieg Badawi, and Dr. Saima Qureshi. We offer both walk-in and family practice services. Our clinic hours are Monday-Friday 10:00 AM to 6:00 PM, and Saturday 10:00 AM to 4:00 PM. We are closed on Sundays.\n\nWhen booking appointments, you need to collect: First Name, Last Name, Health Card Number, and Date of Birth. Appointments can be for: Follow Up, Referral, Renew Medication, Results, or Sick visits.\n\nBe professional, compassionate, and helpful. Keep your responses concise (under 40 words when possible). Use check_availability to find available time slots with specific doctors, then use book_appointment once the patient confirms their preferred time.\n\nIMPORTANT: Always confirm you have all required information (name, health number, birth date) before booking an appointment."
+        }
+      ],
+      "temperature": 0.7,
+      "tools": [
+        {
+          "type": "function",
+          "async": false,
+          "messages": [
+            {
+              "type": "request-start",
+              "content": "Let me check the doctor's availability for you..."
+            }
+          ],
+          "function": {
+            "name": "check_availability",
+            "description": "Checks available appointment time slots for a specific doctor on a given date. Use this to help patients find suitable appointment times.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "description": "The date to check availability for in YYYY-MM-DD format"
+                },
+                "provider_name": {
+                  "type": "string",
+                  "enum": [
+                    "Dr. Shazia Latif",
+                    "Dr. Meena Hussain",
+                    "Dr. Arieg Badawi",
+                    "Dr. Saima Qureshi"
+                  ],
+                  "description": "The name of the doctor to check availability for"
+                },
+                "appointment_type": {
+                  "type": "string",
+                  "enum": [
+                    "Follow Up",
+                    "Referral",
+                    "Renew Medication",
+                    "Results",
+                    "Sick"
+                  ],
+                  "description": "The type of appointment needed"
+                }
+              },
+              "required": ["date", "provider_name", "appointment_type"]
+            }
+          },
+          "server": {
+            "url": "https://unresentful-myrtice-unawares.ngrok-free.dev/vapi/webhook"
+          }
+        },
+        {
+          "type": "function",
+          "async": false,
+          "messages": [
+            {
+              "type": "request-start",
+              "content": "Let me book that appointment for you..."
+            }
+          ],
+          "function": {
+            "name": "book_appointment",
+            "description": "Books an appointment for a patient with a specific doctor. Only call this after confirming all required patient information and the preferred time slot.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "first_name": {
+                  "type": "string",
+                  "description": "Patient's first name"
+                },
+                "last_name": {
+                  "type": "string",
+                  "description": "Patient's last name"
+                },
+                "health_number": {
+                  "type": "string",
+                  "description": "Patient's Ontario health card number"
+                },
+                "birth_date": {
+                  "type": "string",
+                  "description": "Patient's date of birth in YYYY-MM-DD format"
+                },
+                "phone_number": {
+                  "type": "string",
+                  "description": "Patient's contact phone number"
+                },
+                "provider_name": {
+                  "type": "string",
+                  "enum": [
+                    "Dr. Shazia Latif",
+                    "Dr. Meena Hussain",
+                    "Dr. Arieg Badawi",
+                    "Dr. Saima Qureshi"
+                  ],
+                  "description": "The doctor the patient wants to see"
+                },
+                "appointment_time": {
+                  "type": "string",
+                  "description": "The appointment date and time in ISO format (e.g., 2026-02-20T14:00:00Z)"
+                },
+                "appointment_type": {
+                  "type": "string",
+                  "enum": [
+                    "Follow Up",
+                    "Referral",
+                    "Renew Medication",
+                    "Results",
+                    "Sick"
+                  ],
+                  "description": "The type of appointment"
+                }
+              },
+              "required": [
+                "first_name",
+                "last_name",
+                "health_number",
+                "birth_date",
+                "phone_number",
+                "provider_name",
+                "appointment_time",
+                "appointment_type"
+              ]
+            }
+          },
+          "server": {
+            "url": "https://unresentful-myrtice-unawares.ngrok-free.dev/vapi/webhook"
+          }
+        }
+      ]
+    },
+    "voice": {
+      "provider": "11labs",
+      "voiceId": "marissa"
+    },
+    "clientMessages": [
+      "conversation-update",
+      "function-call",
+      "hang",
+      "metadata",
+      "speech-update",
+      "status-update",
+      "transcript",
+      "tool-calls"
+    ],
+    "serverMessages": [
+      "end-of-call-report",
+      "function-call",
+      "hang",
+      "speech-update",
+      "status-update",
+      "tool-calls"
+    ],
+    "maxDurationSeconds": 900,
+    "backgroundSound": "office"
+  },
+  "calendar_credentials": {}
+}
